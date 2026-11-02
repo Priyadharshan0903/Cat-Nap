@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "types": [
+      "vite/client",
+      "node"
+    ]
+  },
+  "include": [
+    "app/Cat.tsx",
+    "app/Game.tsx",
+    "app/Modal.tsx",
+    "lib/puzzle.ts",
+    "lib/progress.ts",
+    "lib/storage.ts",
+    "lib/use-progress.ts",
+    "lib/catalog.ts",
+    "src",
+    "tools/*.ts",
+    "tests",
+    "vite.config.ts"
+  ]
+}

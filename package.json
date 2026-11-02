@@ -1,0 +1,36 @@
+{
+  "name": "catnap",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 8820 --strictPort",
+    "build": "tsc --noEmit && vite build && node tools/build-offline.mjs",
+    "preview": "vite preview --host 127.0.0.1 --port 8820 --strictPort",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "levels:generate": "node --experimental-strip-types tools/generate-levels.ts",
+    "typecheck": "tsc --noEmit",
+    "test:ui": "node tests/interface.cjs && node tests/offline.cjs"
+  },
+  "dependencies": {
+    "@fontsource/manrope": "^5.2.8",
+    "dexie": "^4.2.1",
+    "lucide-react": "^1.31.0",
+    "motion": "^12.23.24",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "fake-indexeddb": "^6.2.4",
+    "jsdom": "^30.1.3",
+    "typescript": "5.9.3",
+    "vite": "8.0.13"
+  }
+}

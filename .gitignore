@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.qa/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+.env*
+.dev.vars*
+.sites-runtime/
+.wrangler/
+.vinext/
+.openai/
+.taste-skill/inspect/
+outputs/
+.DS_Store
+docs/workbench.json
