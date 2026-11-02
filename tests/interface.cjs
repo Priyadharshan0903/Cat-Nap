@@ -1,73 +1,28 @@
-const { JSDOM } = require("jsdom");
-const { indexedDB, IDBKeyRange, IDBFactory } = require("fake-indexeddb");
-const fs = require("node:fs"),
-  assert = require("node:assert/strict"),
-  crypto = require("node:crypto");
-const html = fs
-  .readFileSync("dist/index.html", "utf8")
-  .replace(/<script[^>]*type="module"[\s\S]*?<\/script>/, "");
-const asset = fs
-  .readFileSync("dist/index.html", "utf8")
-  .match(/src="\.\/assets\/([^"]+\.js)"/)[1];
-const bundle = fs.readFileSync("dist/assets/" + asset, "utf8");
-const errors = [];
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function launch(saved = {}, isolated = false) {
-  const dom = new JSDOM(html, {
-    url: "http://localhost:8765/catnap/game/dist/",
-    runScripts: "dangerously",
-    pretendToBeVisual: true,
-  });
-  const w = dom.window;
-  w.indexedDB = isolated ? new IDBFactory() : indexedDB;
-  w.IDBKeyRange = IDBKeyRange;
-  w.structuredClone = structuredClone;
-  w.matchMedia = (q) => ({
-    matches: false,
-    media: q,
-    addListener() {},
-    removeListener() {},
-    addEventListener() {},
-    removeEventListener() {},
-  });
-  w.Element.prototype.scrollIntoView = function () {};
-  w.URL.createObjectURL = () => "blob:backup";
-  w.URL.revokeObjectURL = () => {};
-  w.HTMLAnchorElement.prototype.click = function () {
-    w.__downloaded = this.download;
-  };
-  Object.defineProperty(w.crypto, "randomUUID", {
-    value: () => crypto.randomUUID(),
-  });
-  for (const [key, value] of Object.entries(saved))
-    w.localStorage.setItem(key, value);
-  w.addEventListener("error", (e) => errors.push(e.error?.stack || e.message));
-  w.eval(bundle);
-  await sleep(150);
-  return dom;
-}
-const textButton = (w, text) =>
-  [...w.document.querySelectorAll("button")].find(
-    (el) =>
-      el.textContent.trim() === text ||
-      (["Hint", "Find a cat"].includes(text) &&
-        el.querySelector(".token-count") &&
-        el.textContent.trim().startsWith(text)),
-  );
-const click = async (w, text) => {
-  const b = textButton(w, text);
-  assert.ok(b, `Button exists: ${text}`);
-  b.click();
-  await sleep(60);
-};
+const { launch, click, textButton, sleep, errors } = require("./harness.cjs");
+const fs = require("node:fs"), assert = require("node:assert/strict");
 (async () => {
   let dom = await launch(),
     w = dom.window;
   assert.equal(w.document.querySelector("h1").textContent, "Level 01Easy");
   await click(w, "Hint");
-  assert.ok(w.document.querySelector(".hint-card"));
-  await click(w, "Place this cat");
-  assert.equal(w.document.querySelectorAll(".cell.has-cat").length, 1);
+  const explanation = w.document.querySelector('[role="region"][aria-label="Hint explanation"]');
+  assert.ok(explanation);
+  assert.ok(explanation.compareDocumentPosition(w.document.querySelector(".board-card")) & w.Node.DOCUMENT_POSITION_FOLLOWING,
+    "The reason comes before the board, not beneath the game actions");
+  assert.equal(w.document.activeElement === explanation, true, "Keyboard focus reaches the reason when a hint opens");
+  assert.equal(w.__lastScroll.className, "hint-anchor", "Hints bring their explanation and board into view");
+  assert.equal(w.__lastScroll.options.block, "start");
+  assert.ok(explanation.contains(w.document.querySelector('[aria-label="Dismiss hint"]')));
+  assert.ok(w.document.querySelectorAll(".hint-dimmed").length > 0);
+  assert.ok(w.document.querySelectorAll(".hinted").length > 0);
+  assert.equal(w.document.querySelectorAll(".region-number").length, 0, "Hints do not force corner numbers onto the board");
+  assert.equal(textButton(w, "Place this cat"), undefined);
+  const hintApply = w.document.querySelector(".hint-card .text-button");
+  assert.match(hintApply.textContent, /^Apply · Mark .* X/);
+  hintApply.click();
+  await sleep(50);
+  assert.equal(w.document.querySelectorAll(".cell.has-cat").length, 0, "Teaching hints never place cats");
+  assert.ok(w.document.querySelectorAll('.cell[aria-label*="marked X"]').length > 0);
   await click(w, "Undo");
   assert.equal(w.document.querySelectorAll(".cell.has-cat").length, 0);
   assert.equal(
@@ -83,7 +38,12 @@ const click = async (w, text) => {
     "Reopening the same hint is free",
   );
   w.document.querySelector('[aria-label="Dismiss hint"]').click();
-  await sleep(50);
+  await sleep(400);
+  await click(w, "Hint");
+  w.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await sleep(400);
+  assert.equal(w.document.querySelector(".hint-card") === null, true, "Escape dismisses the floating reason");
+  assert.equal(w.document.querySelectorAll(".hint-dimmed").length, 0, "Dismiss also clears the spotlight");
   const target = w.document.querySelector(".cell");
   target.dispatchEvent(new w.MouseEvent("click", { bubbles: true, detail: 1 }));
   target.dispatchEvent(new w.MouseEvent("click", { bubbles: true, detail: 2 }));
@@ -218,6 +178,7 @@ const click = async (w, text) => {
   await sleep(30);
   await click(w, "Export save");
   assert.match(w.__downloaded, /catnap-save-.*\.json/);
+  assert.equal(w.__downloadAttached, true, "Safari download link is attached to the page");
   const backup = JSON.parse(w.localStorage.getItem("catnap.save.v1"));
   backup.completed["level-002"] = {
     levelId: "level-002",

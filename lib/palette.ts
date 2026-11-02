@@ -9,6 +9,9 @@ export const REGION_COLORS = [
   "#dfcbb1",
   "#cbd1d0",
 ];
+export const REGION_NAMES = [
+  "Gold", "Mint", "Sky blue", "Peach", "Sage", "Rose", "Teal", "Sand", "Slate",
+];
 export const REGION_COATS = [
   { coat: "#e7bd58", patch: "#ad8431" },
   { coat: "#82b9a8", patch: "#467d6c" },

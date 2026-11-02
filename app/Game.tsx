@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { AnimatePresence, motion, MotionConfig } from "motion/react";
 import {
@@ -42,16 +43,13 @@ import {
   autoMarks,
   conflicts,
   isSolved,
-  nextHint,
   type Board,
-  type Hint,
   type Puzzle,
 } from "../lib/puzzle";
 import { CHAPTERS, dayKey, getPuzzle, LEVELS } from "../lib/catalog";
 import {
   mergeProgress,
   saveForLevel,
-  validProgress,
   type GameSave,
   type Settings,
 } from "../lib/progress";
@@ -59,8 +57,9 @@ import { useProgress } from "../lib/use-progress";
 import { Cat, CATS, WindowScene } from "./Cat";
 import Modal from "./Modal";
 import JourneyMap from "./JourneyMap";
+import HintPanel from "./HintPanel";
 import { REGION_COLORS } from "../lib/palette";
-import { tapCell, markCell, catCell, type Tap } from "../lib/gestures";
+import { tapCell, markCell, catCell, markStroke, strokeCells, type Tap } from "../lib/gestures";
 import {
   emptyAssists,
   earnedRewards,
@@ -73,7 +72,17 @@ import {
   type Tokens,
 } from "../lib/rewards";
 
+import { coachingHint, type CoachingHint } from "../lib/coaching";
+import { downloadBackup, parseBackup, readBackupFile } from "../lib/backup";
+
 const COLORS = REGION_COLORS;
+type Stroke = { pointer: number; first: number; last: number; cells: Set<number>; before: Board; active: boolean; preview: Board };
+const THEMES = [
+  { id: "garden", name: "Garden", detail: "Soft greens", swatches: ["#f8f9f4", "#45694e", "#bdd8cf"] },
+  { id: "ocean", name: "Seaside", detail: "Cool blues", swatches: ["#f2f7fa", "#346278", "#bfd8e5"] },
+  { id: "night", name: "Night", detail: "A quieter glow", swatches: ["#191b1a", "#afc8ac", "#424944"] },
+  { id: "system", name: "Device", detail: "Follow light / dark", swatches: ["#f8f9f4", "#191b1a", "#afc8ac"] },
+] as const;
 const BLANK: Board = { cats: [], marks: [] };
 const time = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds) % 60).padStart(2, "0")}`;
@@ -98,17 +107,24 @@ export default function Game() {
   const [elapsed, setElapsed] = useState(0),
     elapsedRef = useRef(0);
   const tapRef = useRef<Tap | null>(null);
+  const strokeRef = useRef<Stroke | null>(null);
+  const suppressClick = useRef(false);
+  const activeSave = useRef<{ levelId: string; id: string } | null>(null);
+  const [backupStatus, setBackupStatus] = useState("");
+  const [importing, setImporting] = useState(false);
+  const importBusy = useRef(false);
   const assistsRef = useRef<AttemptAssists>(emptyAssists());
   const [refillKind, setRefillKind] = useState<AssistKind>("hints");
   const [winGift, setWinGift] = useState<Tokens>({ hints: 0, cats: 0 });
   const balance = rewardBalance(progress);
   const [dialog, setDialog] = useState<Dialog>(null),
-    [hint, setHint] = useState<Hint | null>(null);
+    [hint, setHint] = useState<CoachingHint | null>(null);
   const [paused, setPaused] = useState(false),
     [toast, setToast] = useState("");
   const [offlineReady, setOfflineReady] = useState(false);
   const [history, setHistory] = useState<Board[]>([]);
   const [focusedCell, setFocusedCell] = useState(0);
+  const [appliedHintCells, setAppliedHintCells] = useState<number[]>([]);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]),
     imported = useRef<HTMLInputElement>(null);
   const initialized = useRef(false),
@@ -134,6 +150,7 @@ export default function Game() {
   const automatic = progress.settings.autoMark
     ? autoMarks(puzzle, board.cats)
     : [];
+  const settledRegions = new Set(board.cats.filter((c) => puzzle.solution.includes(c) && !badCells.includes(c)).map((c) => puzzle.regions[c]));
   const nextLevel =
     LEVELS.find((l) => l.number > puzzle.number && !progress.completed[l.id]) ??
     LEVELS.find((l) => !progress.completed[l.id]);
@@ -141,7 +158,7 @@ export default function Game() {
   const updateSettings = (value: Partial<Settings>) =>
     commit((old) => ({
       ...old,
-      settings: { ...old.settings, ...value, updatedAt: Date.now() },
+      settings: { ...old.settings, ...value, updatedAt: Math.max(Date.now(), old.settings.updatedAt + 1) },
     }));
   const writeBoard = useCallback(
     (
@@ -155,7 +172,7 @@ export default function Game() {
         const old = options.spend
           ? (spendAssist(original, device, options.spend) ?? original)
           : original;
-        const id = `${target.id}:${device}`,
+        const id = activeSave.current?.levelId === target.id ? activeSave.current.id : `${target.id}:${device}`,
           previous = old.games[id];
         const game: GameSave = {
           ...value,
@@ -163,7 +180,7 @@ export default function Game() {
           levelId: target.id,
           device,
           revision: (previous?.revision ?? 0) + 1,
-          updatedAt: Date.now(),
+          updatedAt: Math.max(Date.now(), ...Object.values(old.games).filter((g) => g.levelId === target.id).map((g) => g.updatedAt + 1)),
           elapsed: seconds,
           assists: {
             ...assistsRef.current,
@@ -208,6 +225,15 @@ export default function Game() {
       ? { cats: saved.cats, marks: saved.marks }
       : { cats: [], marks: [] };
     tapRef.current = null;
+    strokeRef.current = null;
+    suppressClick.current = false;
+    const localId = `${target.id}:${device}`;
+    const reusable = safe && Object.values(progressRef.current.games).find((game) =>
+      game.levelId === target.id && game.device === device && game.elapsed === saved.elapsed &&
+      game.cats.join(",") === saved.cats.join(",") && game.marks.join(",") === saved.marks.join(",") &&
+      JSON.stringify(game.assists ?? emptyAssists()) === JSON.stringify(saved.assists ?? emptyAssists()));
+    activeSave.current = { levelId: target.id, id: safe && saved.device === device ? saved.id :
+      reusable ? reusable.id : safe && progressRef.current.games[localId] ? `${localId}:${crypto.randomUUID()}` : localId };
     assistsRef.current =
       safe && saved.assists
         ? { ...saved.assists, hintKeys: [...saved.assists.hintKeys] }
@@ -241,8 +267,23 @@ export default function Game() {
     }
   }, [ready]);
   useEffect(() => {
-    if (dialog || paused) tapRef.current = null;
+    if (dialog || paused) {
+      tapRef.current = null;
+      if (strokeRef.current) { strokeRef.current = null; setBoard(boardRef.current); }
+    }
   }, [dialog, paused]);
+  useEffect(() => {
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const selected = progress.settings.theme ?? "garden";
+      const theme = selected === "system" ? media.matches ? "night" : "garden" : selected;
+      document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "night" ? "#191b1a" : theme === "ocean" ? "#f2f7fa" : "#f8f9f4");
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [progress.settings.theme]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4000);
@@ -340,6 +381,57 @@ export default function Game() {
     tapRef.current = result.pending;
     change(result.board, !result.double);
   };
+  function beginStroke(event: ReactPointerEvent<HTMLButtonElement>, cell: number) {
+    if (event.isPrimary === false || event.button !== 0) return;
+    suppressClick.current = false;
+    if (!ready || paused || solved || dialog || progress.settings.dragMark === false) return;
+    const before = boardRef.current;
+    strokeRef.current = { pointer: event.pointerId, first: cell, last: cell, cells: new Set([cell]), before, preview: before, active: false };
+  }
+  function moveStroke(event: ReactPointerEvent<HTMLDivElement>) {
+    const stroke = strokeRef.current;
+    if (!stroke || stroke.pointer !== event.pointerId) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = event.clientX - rect.left, y = event.clientY - rect.top;
+    if (x < 0 || y < 0 || x >= rect.width || y >= rect.height) return;
+    const cell = Math.floor(y / rect.height * puzzle.size) * puzzle.size + Math.floor(x / rect.width * puzzle.size);
+    if (cell === stroke.last) return;
+    if (!stroke.active) {
+      stroke.active = true;
+      tapRef.current = null;
+      setHint(null);
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
+    for (const c of strokeCells(stroke.last, cell, puzzle.size)) stroke.cells.add(c);
+    stroke.last = cell;
+    stroke.preview = markStroke(stroke.before, stroke.cells);
+    setBoard(stroke.preview);
+    event.preventDefault();
+  }
+  function finishStroke(event: ReactPointerEvent<HTMLDivElement>) {
+    const stroke = strokeRef.current;
+    if (!stroke || stroke.pointer !== event.pointerId) return;
+    strokeRef.current = null;
+    if (!stroke.active) return; // The native click retains single/double tap semantics.
+    suppressClick.current = true;
+    tapRef.current = null;
+    if (stroke.preview.marks.length !== stroke.before.marks.length) change(stroke.preview);
+    else setBoard(stroke.before);
+  }
+  function cancelStroke() {
+    if (!strokeRef.current) return;
+    strokeRef.current = null;
+    tapRef.current = null;
+    suppressClick.current = true;
+    setBoard(boardRef.current);
+  }
+  useEffect(() => {
+    const cancel = () => cancelStroke();
+    addEventListener("blur", cancel);
+    document.addEventListener("visibilitychange", cancel);
+    return () => { removeEventListener("blur", cancel); document.removeEventListener("visibilitychange", cancel); };
+  }, []);
   const undo = () => {
     tapRef.current = null;
     const previous = history[history.length - 1];
@@ -350,13 +442,13 @@ export default function Game() {
   const showHint = (freeCorrection = false) => {
     if (solved || paused || !ready) return;
     tapRef.current = null;
-    const value = nextHint(puzzle, boardRef.current);
+    const value = coachingHint(puzzle, boardRef.current, progressRef.current.settings.autoMark);
     if (!value) {
       setToast("Try “Find a cat” for a helping paw.");
       return;
     }
-    const key = `${puzzle.id}:${value.cell}:${[...boardRef.current.cats].sort((a, b) => a - b).join(",")}`;
-    if (!assistsRef.current.hintKeys.includes(key)) {
+    const key = `coach:${puzzle.id}:${value.kind}:${value.cells.join(",")}:${[...boardRef.current.cats].sort((a, b) => a - b).join(",")}`;
+    if (value.kind !== "observe" && !assistsRef.current.hintKeys.includes(key)) {
       if (!freeCorrection && rewardBalance(progressRef.current).hints < 1) {
         setRefillKind("hints");
         setDialog("refill");
@@ -373,21 +465,23 @@ export default function Game() {
     }
     setHint(value);
   };
+  useEffect(() => {
+    if (!appliedHintCells.length) return;
+    const timer = setTimeout(() => setAppliedHintCells([]), 650);
+    return () => clearTimeout(timer);
+  }, [appliedHintCells]);
   const applyHint = () => {
     if (!hint || paused || solved || !ready) return;
     const current = boardRef.current;
     if (hint.kind === "remove")
-      change({ ...current, cats: current.cats.filter((c) => c !== hint.cell) });
+      change({ ...current, cats: current.cats.filter((c) => !hint.cells.includes(c)) });
     else if (hint.kind === "unmark")
-      change({
-        ...current,
-        marks: current.marks.filter((c) => c !== hint.cell),
-      });
-    else
-      change({
-        cats: [...current.cats.filter((c) => c !== hint.cell), hint.cell],
-        marks: current.marks.filter((c) => c !== hint.cell),
-      });
+      change({ ...current, marks: current.marks.filter((c) => !hint.cells.includes(c)) });
+    else if (hint.kind === "mark") {
+      setAppliedHintCells(hint.cells);
+      change(markStroke(current, hint.cells));
+    }
+
   };
   const findCat = () => {
     if (!ready || paused || solved) return;
@@ -454,50 +548,46 @@ export default function Game() {
     }
   }
   function exportSave() {
-    writeBoard(boardRef.current);
-    const file = new Blob([JSON.stringify(progressRef.current, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(file),
-      anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `catnap-save-${dayKey()}.json`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setToast("Your save is ready. Keep it somewhere cozy.");
+    if (!ready || importBusy.current) return;
+    try {
+      writeBoard(boardRef.current);
+      downloadBackup(progressRef.current, `catnap-save-${dayKey()}.json`);
+      const message = "Backup download started. On iPhone, look in Downloads or save the file to Files.";
+      setBackupStatus(message);
+      setToast(message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not create a backup. Try again.";
+      setBackupStatus(message); setToast(message);
+    }
   }
   async function importSave(file?: File) {
-    if (!file) return;
+    if (!file || importBusy.current || !ready) return;
+    importBusy.current = true;
+    setImporting(true);
+    setBackupStatus("Reading your backup…");
     try {
-      if (file.size > 1_500_000)
-        throw new Error("This save file is too large.");
-      const value: unknown = JSON.parse(await file.text());
-      if (!validProgress(value))
-        throw new Error(
-          "That is not a valid Catnap save. Your progress is unchanged.",
-        );
-      for (const game of Object.values(value.games)) {
-        const level = getPuzzle(game.levelId);
-        if (
-          !level ||
-          [...game.cats, ...game.marks].some((c) => c >= level.size ** 2)
-        )
-          throw new Error(
-            "This save contains an unknown level or invalid board.",
-          );
-      }
-      if (Object.keys(value.completed).some((id) => !getPuzzle(id)))
-        throw new Error("This save contains an unknown completed level.");
+      const value = parseBackup(await readBackupFile(file));
+      writeBoard(boardRef.current);
+      const before = Object.keys(progressRef.current.completed).length;
       const merged = mergeProgress(progressRef.current, value);
       commit(merged);
-      openPuzzle(getPuzzle(merged.settings.lastLevel) ?? puzzle, false);
-      setToast("Welcome back. Your saved progress has been added.");
+      const target = getPuzzle(value.settings.lastLevel)!;
+      const incoming = saveForLevel(value, target.id, device);
+      // Open the transferred branch even when local settings have a newer timestamp.
+      // The merge still protects a newer version of that same branch.
+      openPuzzle(target, false, incoming ? merged.games[incoming.id] : undefined);
+      const saved = await commit(progressRef.current);
+      const count = Object.keys(merged.completed).length - before;
+      const message = `Backup imported. ${count} new completed ${count === 1 ? "puzzle" : "puzzles"}; ${Object.keys(merged.completed).length} total. ${saved ? "Boards and rewards are saved." : "Browser storage is blocked; export a backup before leaving."}`;
+      setBackupStatus(message);
+      setToast(message);
     } catch (error) {
-      setToast(
-        error instanceof Error ? error.message : "Could not read that save.",
-      );
+      const message = error instanceof Error ? error.message : "Could not read that save.";
+      setBackupStatus(message); setToast(message);
+    } finally {
+      importBusy.current = false; setImporting(false);
+      if (imported.current) imported.current.value = "";
     }
-    if (imported.current) imported.current.value = "";
   }
   const alternateSaves = Object.values(progress.games)
     .filter((g) => g.levelId === levelId)
@@ -712,7 +802,18 @@ export default function Game() {
                 </button>
               </div>
             </div>
-            <div className="board-card">
+            <AnimatePresence>
+              {hint && !paused && !dialog && (
+                <HintPanel
+                  key="hint"
+                  hint={hint}
+                  quiet={progress.settings.reducedMotion}
+                  onApply={applyHint}
+                  onDismiss={() => setHint(null)}
+                />
+              )}
+            </AnimatePresence>
+            <motion.div className="board-card" layout="position" transition={{ layout: { type: "spring", stiffness: 360, damping: 34 } }}>
               <div className="board-status">
                 <span>Find a home for every cat</span>
                 <span className="cat-count">
@@ -723,7 +824,11 @@ export default function Game() {
               </div>
               <div className="board-wrap">
                 <div
-                  className={`puzzle-board ${paused ? "is-paused" : ""}`}
+                  className={`puzzle-board ${paused ? "is-paused" : ""} ${progress.settings.dragMark !== false ? "can-drag" : ""}`}
+                  onPointerMove={moveStroke}
+                  onPointerUp={finishStroke}
+                  onPointerCancel={cancelStroke}
+                  onLostPointerCapture={() => { if (strokeRef.current) cancelStroke(); }}
                   role="group"
                   aria-label={`${puzzle.size} by ${puzzle.size} cat puzzle`}
                   style={{ "--size": puzzle.size } as CSSProperties}
@@ -736,27 +841,21 @@ export default function Game() {
                     const hasCat = board.cats.includes(cell),
                       marked = board.marks.includes(cell),
                       auto = automatic.includes(cell) && !hasCat && !marked;
+                    const topBorder = row === 0 ? 0 : puzzle.regions[cell - n] !== region ? 2 : 1;
+                    const leftBorder = col === 0 ? 0 : puzzle.regions[cell - 1] !== region ? 2 : 1;
                     return (
                       <button
                         key={`${levelId}:${cell}`}
                         ref={(el) => {
                           buttons.current[cell] = el;
                         }}
-                        className={`cell ${hasCat ? "has-cat" : ""} ${badCells.includes(cell) ? "conflict" : ""} ${hint?.cell === cell ? "hinted" : ""} ${hint && puzzle.regions[hint.cell] === region ? "hint-region" : ""}`}
+                        className={`cell ${hasCat ? "has-cat" : ""} ${badCells.includes(cell) ? "conflict" : ""} ${hint?.cells.includes(cell) ? "hinted" : ""} ${hint && !hint.focus.includes(cell) ? "hint-dimmed" : ""} ${hint?.focus.includes(cell) ? "hint-focus" : ""} ${settledRegions.has(region) ? "region-settled" : ""}`}
                         style={{
                           backgroundColor: COLORS[region],
-                          borderTopWidth:
-                            row === 0
-                              ? 0
-                              : puzzle.regions[cell - n] !== region
-                                ? 2
-                                : 1,
-                          borderLeftWidth:
-                            col === 0
-                              ? 0
-                              : puzzle.regions[cell - 1] !== region
-                                ? 2
-                                : 1,
+                          "--cell-border-top": `${topBorder}px`,
+                          "--cell-border-left": `${leftBorder}px`,
+                          borderTopWidth: topBorder,
+                          borderLeftWidth: leftBorder,
                           borderTopColor:
                             row > 0 && puzzle.regions[cell - n] !== region
                               ? "#61746b"
@@ -765,19 +864,24 @@ export default function Game() {
                             col > 0 && puzzle.regions[cell - 1] !== region
                               ? "#61746b"
                               : "#61746b25",
-                        }}
-                        aria-label={`Row ${row + 1}, column ${col + 1}, region ${region + 1}${hasCat ? ", cat" : marked ? ", marked X" : auto ? ", automatically ruled out" : ", empty"}${badCells.includes(cell) ? ", conflict" : ""}${hint?.cell === cell ? ", hint" : ""}`}
+                        } as CSSProperties}
+                        aria-label={`Row ${row + 1}, column ${col + 1}, region ${region + 1}${hasCat ? ", cat" : marked ? ", marked X" : auto ? ", automatically ruled out" : ", empty"}${badCells.includes(cell) ? ", conflict" : ""}${hint?.cells.includes(cell) ? ", hint action" : hint?.focus.includes(cell) ? ", hint focus" : ""}`}
                         aria-pressed={hasCat || marked}
                         tabIndex={cell === focusedCell ? 0 : -1}
                         onFocus={() => setFocusedCell(cell)}
                         disabled={!ready || paused}
-                        onClick={(event) => handleTap(cell, event.detail !== 0)}
+                        onPointerDown={(event) => beginStroke(event, cell)}
+                        onClick={(event) => {
+                          if (event.detail !== 0 && suppressClick.current) return;
+                          handleTap(cell, event.detail !== 0);
+                        }}
                         onContextMenu={(event) => {
                           event.preventDefault();
                           cellAction(cell, "mark");
                         }}
                         onKeyDown={(event) => gridKey(event, cell)}
                       >
+                        {hasCat && settledRegions.has(region) && <span className="cat-settled-check" aria-label="Correct cat; region complete"><Check size={11} /></span>}
                         {progress.settings.patterns && (
                           <span className="region-number">{region + 1}</span>
                         )}
@@ -799,16 +903,17 @@ export default function Game() {
                                 kind={cat.id}
                                 region={region}
                                 faceOnly
-                                happy={solved}
+                                happy={settledRegions.has(region)}
                               />
                             </motion.span>
                           ) : marked ? (
                             <motion.span
                               className="cell-mark"
                               key="mark"
-                              initial={{ scale: 0.3 }}
-                              animate={{ scale: 1 }}
-                              exit={{ opacity: 0 }}
+                              initial={{ scale: 0.3, opacity: 0, rotate: appliedHintCells.includes(cell) ? -10 : 0 }}
+                              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                              exit={{ opacity: 0, transition: { duration: 0.12, delay: 0 } }}
+                              transition={{ type: "spring", stiffness: 420, damping: 25, delay: appliedHintCells.includes(cell) ? Math.min(appliedHintCells.indexOf(cell) * 0.025, 0.18) : 0 }}
                             >
                               <X strokeWidth={1.8} />
                             </motion.span>
@@ -849,8 +954,9 @@ export default function Game() {
                   <span className="tap-dot double-dot" />
                   Double tap <PawPrint size={14} /> cat
                 </span>
+                {progress.settings.dragMark !== false && <span className="drag-guide">Drag to mark Xs</span>}
               </div>
-            </div>
+            </motion.div>
             <div className="game-actions">
               <button
                 onClick={undo}
@@ -903,38 +1009,6 @@ export default function Game() {
                 </span>
               )}
             </div>
-            <AnimatePresence>
-              {hint && (
-                <motion.div
-                  className="hint-card"
-                  key="hint"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <div className="hint-title">
-                    <Lightbulb size={17} />
-                    <strong>A little nudge</strong>
-                    <button
-                      className="icon-button"
-                      aria-label="Dismiss hint"
-                      onClick={() => setHint(null)}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                  <p>{hint.explanation}</p>
-                  <button className="text-button" onClick={applyHint}>
-                    {hint.kind === "remove"
-                      ? "Remove this cat"
-                      : hint.kind === "unmark"
-                        ? "Clear this X"
-                        : "Place this cat"}
-                    <ArrowRight size={15} />
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
             {solved && dialog !== "win" && (
               <button
                 className="primary-button continue-button"
@@ -1173,6 +1247,17 @@ export default function Game() {
         {dialog === "settings" && (
           <Modal title="Make yourself at home" onClose={() => setDialog(null)}>
             <div className="setting-group">
+              <h3>Choose your atmosphere</h3>
+              <div className="theme-options" role="group" aria-label="Theme">
+                {THEMES.map((theme) => <button key={theme.id} className="theme-option" aria-pressed={(progress.settings.theme ?? "garden") === theme.id} onClick={() => updateSettings({ theme: theme.id })}>
+                  <span className="theme-swatches" aria-hidden="true">{theme.swatches.map((color) => <i key={color} style={{ background: color }} />)}</span>
+                  <strong>{theme.name}</strong><span>{theme.detail}</span>
+                  {(progress.settings.theme ?? "garden") === theme.id && <Check size={15} />}
+                </button>)}
+              </div>
+              <p className="setting-copy">Board colors stay familiar in every theme.</p>
+            </div>
+            <div className="setting-group">
               <h3>Little preferences</h3>
               {(
                 [
@@ -1181,6 +1266,11 @@ export default function Game() {
                     title: "Auto-mark impossible squares",
                     description:
                       "A quiet dot marks squares blocked by your cats.",
+                  },
+                  {
+                    key: "dragMark",
+                    title: "Drag to mark Xs",
+                    description: "Paint Xs across squares in one stroke. Turn off to scroll over the board.",
                   },
                   {
                     key: "patterns",
@@ -1203,11 +1293,11 @@ export default function Game() {
                     id={setting.key}
                     className="toggle"
                     role="switch"
-                    aria-checked={progress.settings[setting.key]}
+                    aria-checked={progress.settings[setting.key] ?? (setting.key === "dragMark")}
                     aria-label={setting.title}
                     onClick={() =>
                       updateSettings({
-                        [setting.key]: !progress.settings[setting.key],
+                        [setting.key]: !(progress.settings[setting.key] ?? (setting.key === "dragMark")),
                       })
                     }
                   >
@@ -1233,18 +1323,20 @@ export default function Game() {
                 keep a backup.
               </p>
               <div className="backup-actions">
-                <button className="secondary-button" onClick={exportSave}>
+                <button className="secondary-button" onClick={exportSave} disabled={!ready || importing}>
                   <Download size={17} />
                   Export save
                 </button>
                 <button
                   className="secondary-button"
+                  disabled={!ready || importing}
                   onClick={() => imported.current?.click()}
                 >
                   <Upload size={17} />
-                  Import save
+                  {importing ? "Importing…" : "Import save"}
                 </button>
               </div>
+              {backupStatus && <p className="backup-status" role="status">{backupStatus}</p>}
               <input
                 type="file"
                 ref={imported}
@@ -1341,9 +1433,9 @@ export default function Game() {
               <h3>A helping paw is always here.</h3>
               <p>
                 <strong>Single tap</strong> to mark an X; tap the X again to
-                clear it. <strong>Double tap</strong> to place a cat, or double
+                clear it. <strong>Drag</strong> to paint Xs across cells; one Undo clears the stroke. <strong>Double tap</strong> to place a cat, or double
                 tap a cat to remove it. Cats match their colored regions.{" "}
-                <strong>Hint</strong> explains a deduction;{" "}
+                <strong>Hint</strong> focuses a deduction and can mark impossible squares;{" "}
                 <strong>Find a cat</strong> places one for you. Your helping-paw
                 counts grow as you finish puzzles, with free refills whenever
                 you run out.

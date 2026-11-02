@@ -22,6 +22,8 @@ export type Completion = {
   stars?: 1 | 2 | 3;
 };
 export type Settings = {
+  theme?: "garden" | "ocean" | "night" | "system";
+  dragMark?: boolean;
   cat: string;
   autoMark: boolean;
   reducedMotion: boolean;
@@ -45,6 +47,8 @@ export function emptyProgress(): Progress {
     rewards: emptyLedger(),
     settings: {
       cat: "mochi",
+      theme: "garden",
+      dragMark: true,
       autoMark: false,
       reducedMotion: false,
       patterns: false,
@@ -147,6 +151,8 @@ export function validProgress(value: unknown): value is Progress {
     typeof p.settings.autoMark !== "boolean" ||
     typeof p.settings.reducedMotion !== "boolean" ||
     typeof p.settings.patterns !== "boolean"
+    || (p.settings.theme !== undefined && !["garden", "ocean", "night", "system"].includes(p.settings.theme))
+    || (p.settings.dragMark !== undefined && typeof p.settings.dragMark !== "boolean")
   )
     return false;
   if (

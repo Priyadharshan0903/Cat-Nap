@@ -32,7 +32,10 @@ export function dailyPuzzle(day: string): Puzzle {
   };
 }
 export function getPuzzle(id: string): Puzzle | undefined {
-  if (/^daily-\d{4}-\d{2}-\d{2}$/.test(id)) return dailyPuzzle(id.slice(6));
+  if (/^daily-\d{4}-\d{2}-\d{2}$/.test(id)) {
+    const date = new Date(`${id.slice(6)}T12:00:00`);
+    return Number.isFinite(date.getTime()) && dayKey(date) === id.slice(6) ? dailyPuzzle(id.slice(6)) : undefined;
+  }
   return LEVELS.find((l) => l.id === id);
 }
 export const CHAPTERS = [

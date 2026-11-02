@@ -1,6 +1,26 @@
 import type { Board } from "./puzzle.ts";
 export type Tap = { cell: number; at: number; before: Board };
 export const DOUBLE_TAP_MS = 330;
+/** Paint, never toggle: crossing a square twice cannot erase an X or a cat. */
+export function markStroke(board: Board, cells: Iterable<number>): Board {
+  return { cats: board.cats, marks: [...new Set([...board.marks, ...[...cells].filter((c) => !board.cats.includes(c))])] };
+}
+/** Fill gaps between sampled pointer positions, including quick diagonal strokes. */
+export function strokeCells(from: number, to: number, size: number): number[] {
+  let x = from % size, y = Math.floor(from / size);
+  const endX = to % size, endY = Math.floor(to / size);
+  const dx = Math.abs(endX - x), dy = Math.abs(endY - y);
+  const sx = x < endX ? 1 : -1, sy = y < endY ? 1 : -1;
+  let error = dx - dy;
+  const cells: number[] = [];
+  while (true) {
+    cells.push(y * size + x);
+    if (x === endX && y === endY) return cells;
+    const twice = error * 2;
+    if (twice > -dy) { error -= dy; x += sx; }
+    if (twice < dx) { error += dx; y += sy; }
+  }
+}
 export function markCell(board: Board, cell: number): Board {
   return {
     cats: board.cats.filter((c) => c !== cell),

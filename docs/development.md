@@ -36,13 +36,15 @@ Each move immediately writes a small JSON journal in `localStorage`, then update
 
 Use **Settings → Export save**, transfer the JSON file with AirDrop, iCloud Drive, or another method, then choose **Import save** on the other device. Saves are local to the browser and origin; there is **no automatic cloud sync**. An installed iPhone web app and Safari can have separate storage, so use export/import if changing where you play. Preview and production origins also have separate saves.
 
-The latest updated board for a level resumes by default. Alternate saved boards for the current puzzle are available in Settings when present. Import rejects malformed saves, unknown levels, and out-of-range cells. Clearing or restarting a board retains achievements.
+After an import, the backup’s last puzzle opens so the transfer is visible. Existing local boards are kept as alternatives, and a continued foreign board receives its own local copy. The latest updated board for a level resumes by default. Alternate saved boards for the current puzzle are available in Settings when present. Import rejects malformed saves, unknown levels, and out-of-range cells. Clearing or restarting a board retains achievements.
 
 ## Controls
 
 - **Single tap** to mark an X, and tap the X again to clear it. **Double tap** to place a cat, or double tap an existing cat to clear it. Cats take the color of their region; the selected companion stays beside the board.
+- **Drag** across cells to paint Xs. Existing cats and Xs stay in place; one Undo restores the whole stroke. Turn off **Drag to mark Xs** in Settings to scroll over the board on touchscreens.
+- Choose **Garden**, **Seaside**, **Night**, or **Device** in Settings. Device follows system light/dark changes. Theme and drag preferences are included in backups.
 - Right-click marks an X. Arrow keys move focus; C places a cat, X marks a square, Delete clears it.
-- **Hint** highlights and explains a deduction. Opening a new hint uses one token; reopening the same hint on the same board is free, including after reload. Applying it is optional.
+- **Hint** explains an exclusion, focuses the relevant rows, columns, or colors, and dims unrelated cells. You can optionally mark the excluded squares X; it never places a cat. Opening a new hint uses one token; reopening the same hint on the same board is free, including after reload. Applying it is optional. General observation hints without an action are free.
 - **Find a cat** places a correct cat; if an earlier cat makes the board unsolvable, it first helps remove that cat.
 - Open **Journey** or **All 120 levels** for the winding chapter map. Every level is open. There are no lives, paid assists, or waiting periods.
 - Three cats are available immediately; Olive, Peaches, and Cloud arrive after 8, 24, and 48 distinct puzzles.
@@ -51,7 +53,7 @@ The latest updated board for a level resumes by default. Alternate saved boards 
 
 Start with **10 hint tokens and 5 Find a cat tokens**. Each new puzzle earns **1 hint**; every 5 distinct completed puzzles earns **2 cat assists**. Completing a whole chapter adds **3 hints and 1 cat assist**. Gifts are added automatically; no claim button is needed. Daily puzzles count toward the five-puzzle gift too.
 
-When a pocket runs out, a free refill offers **3 hints** or **1 cat assist**, with no ads, payment, or waiting. Hints are charged when first revealed, and cat assists when they place a cat. A misplaced-cat correction from Find a cat is free. Undo does not refund assistance; restarting begins a new star attempt without refunding spent tokens.
+When a pocket runs out, a free refill offers **3 hints** or **1 cat assist**, with no ads, payment, or waiting. Actionable hints are charged when first revealed, and cat assists when they place a cat. A misplaced-cat correction from Find a cat is free. Undo does not refund assistance; restarting begins a new star attempt without refunding spent tokens.
 
 Earn **1 star** for completing a puzzle, **2** without Find a cat, and **3** without either assist. Replays can improve best stars without repeating first-clear gifts. The map’s 360-star total covers the 120 regular levels. Existing v1 saves remain valid: previous completions receive their completion gifts, while old untracked star ratings show one confirmed completion star until replayed.
 
@@ -74,6 +76,7 @@ The daily puzzle selects and transforms a board from the validated pack using th
 ## Source map
 
 - `app/Game.tsx`, `app/Modal.tsx`, `app/JourneyMap.tsx`: interface, direct gestures, chapter map, and accessible dialogs.
+- `lib/coaching.ts`, `lib/backup.ts`: exclusion-based teaching hints, validated file transfer, and browser download support.
 - `lib/gestures.ts`, `lib/palette.ts`, `lib/rewards.ts`: tap interpretation, region cat colors, reward economy, and star criteria.
 - `app/Cat.tsx`, `app/globals.css`: original SVG cats, window scene, responsive visuals, and animation.
 - `lib/puzzle.ts`, `lib/levels.json`, `lib/catalog.ts`: rules, solver, deductions, level pack, daily selection.

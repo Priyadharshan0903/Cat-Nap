@@ -11,8 +11,9 @@ export function useProgress() {
     (next: Progress | ((old: Progress) => Progress)) => {
       const value = typeof next === "function" ? next(ref.current) : next;
       ref.current = value;
-      void persist(value).then(setCanSave);
+      const saved = persist(value).then((works) => { setCanSave(works); return works; });
       setProgress(value);
+      return saved;
     },
     [],
   );
