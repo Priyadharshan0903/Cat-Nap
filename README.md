@@ -8,14 +8,14 @@ A cozy cat logic game for your browser. Find a home for every cat, follow a wind
 
 ## A little puzzle, a little progress
 
-- **120 puzzles** from 5×5 to 9×9, plus a daily puzzle.
+- **132 puzzles** from 5×5 to 9×9, including 12 Expert challenges, plus a daily puzzle.
 - **A winding journey** with stars, chapter gifts, and new cat companions.
 - **Useful rewards:** earn hints and “Find a cat” assists, with free refills when you run out.
-- **Simple controls:** single tap for an X, double tap for a cat, or drag to mark a trail.
+- **Simple controls:** single tap for an X, double tap for a cat, or drag to mark or erase Xs.
 - **Pick up where you left off:** automatic local saves, offline play, and save-file transfers between devices.
 - **Made for Mac and iPhone**, with keyboard controls and reduced-motion support.
 
-Place one cat in every row, column, and colored region. Cats cannot touch—even diagonally. Take your time; there are no lives to lose.
+Place one cat in every row, column, and colored region. Cats cannot touch—even diagonally. Start with three lives. An incorrect cat costs one; each life returns after 30 minutes, with a saved countdown.
 
 ![Meet your Catnap companions](docs/images/catnap-companions.png)
 

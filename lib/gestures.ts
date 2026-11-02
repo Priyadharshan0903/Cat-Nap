@@ -5,6 +5,12 @@ export const DOUBLE_TAP_MS = 330;
 export function markStroke(board: Board, cells: Iterable<number>): Board {
   return { cats: board.cats, marks: [...new Set([...board.marks, ...[...cells].filter((c) => !board.cats.includes(c))])] };
 }
+/** Pick a stroke's intent from its starting tile; revisiting tiles cannot toggle them again. */
+export function paintStroke(board: Board, cells: Iterable<number>, erase: boolean): Board {
+  if (!erase) return markStroke(board, cells);
+  const crossed = new Set(cells);
+  return { cats: board.cats, marks: board.marks.filter((cell) => !crossed.has(cell)) };
+}
 /** Fill gaps between sampled pointer positions, including quick diagonal strokes. */
 export function strokeCells(from: number, to: number, size: number): number[] {
   let x = from % size, y = Math.floor(from / size);

@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tapCell, DOUBLE_TAP_MS, markStroke, strokeCells } from "../lib/gestures.ts";
+import { tapCell, DOUBLE_TAP_MS, markStroke, paintStroke, strokeCells } from "../lib/gestures.ts";
 const blank = () => ({ cats: [], marks: [] });
+test("an erase stroke clears crossed Xs once, preserves other Xs and cats, and never paints empty squares", () => {
+  const before = { cats: [2], marks: [0, 1, 3, 8] };
+  const cells = [...strokeCells(0, 4, 5), ...strokeCells(4, 0, 5)];
+  assert.deepEqual(paintStroke(before, cells, true), { cats: [2], marks: [8] });
+  assert.deepEqual(paintStroke(before, cells, false), { cats: [2], marks: [0, 1, 3, 8, 4] });
+  assert.deepEqual(before, { cats: [2], marks: [0, 1, 3, 8] });
+});
 test("a stroke fills sampled gaps, preserves cats, and never toggles existing Xs", () => {
   const before = { cats: [2], marks: [1] };
   assert.deepEqual(strokeCells(0, 4, 5), [0, 1, 2, 3, 4]);

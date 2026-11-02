@@ -44,6 +44,13 @@ test("new completions earn useful rewards and a chapter earns its extra bundle",
     cats: 10,
   });
 });
+test("adding Expert keeps old chapter rewards stable and awards the new chapter once", () => {
+  const original = complete(emptyProgress(), 120);
+  assert.deepEqual(rewardBalance(original), { hints: 145, cats: 58 });
+  const finished = complete(structuredClone(original), 132);
+  assert.deepEqual(rewardBalance(finished), { hints: 160, cats: 63 });
+  assert.deepEqual(rewardBalance(mergeProgress(finished, original)), rewardBalance(finished));
+});
 test("replays and repeated imports cannot mint completion gifts again", () => {
   const p = complete(emptyProgress(), 5);
   const before = rewardBalance(p);

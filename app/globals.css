@@ -693,18 +693,25 @@ button:not(:disabled):active {
   margin: 2px auto 12px;
   display: flex;
 }
-.toast {
+.toast-position {
   position: fixed;
   bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding-inline: max(14px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-right));
+  pointer-events: none;
+  z-index: 30;
+}
+.toast {
   background: var(--ink);
   color: var(--paper);
   padding: 14px 22px;
   border-radius: 12px;
-  z-index: 30;
-  max-width: calc(100vw - 28px);
-  width: max-content;
+  max-width: min(440px, 100%);
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 12px;
   box-shadow: 0 6px 24px #344e4320;
 }
@@ -1465,8 +1472,10 @@ button:not(:disabled):active {
   .rules p {
     font-size: 11px;
   }
-  .toast {
+  .toast-position {
     bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  .toast {
     padding: 12px 16px;
     text-align: center;
     font-size: 11px;
@@ -2310,3 +2319,39 @@ button:not(:disabled):active {
 
 .hint-color-name { white-space: nowrap; }
 .hint-color-dot { display: inline-block; width: 12px; height: 12px; margin: 0 5px 0 2px; border-radius: 50%; vertical-align: 0; border: 1px solid #61746b66; }
+
+.expert-entry { color: var(--green); gap: 8px; min-height: 44px; text-align: left; }
+.journey-map > .expert-entry { display: flex; margin: 0 auto 14px; }
+.map-chapter-nav .expert-description { max-width: 300px; margin: 8px auto 0; font-size: 12px; line-height: 1.65; }
+
+.map-chapter-buttons { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .journey { flex-wrap: wrap; row-gap: 2px; }
+  .journey > .expert-entry { flex-basis: 100%; justify-content: flex-end; min-height: 32px; font-size: 11px; }
+}
+
+/* Persistent lives and the wall-clock recharge countdown. */
+.lives-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -4px 0 12px; min-height: 44px; }
+.lives-meter { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; background: var(--soft); border-radius: 12px; font-size: 12px; }
+.life-hearts { display: flex; align-items: center; gap: 5px; }
+.life-full { color: #a75261; fill: #bc7080; }
+.life-empty { color: var(--muted); opacity: .45; fill: none; }
+.lives-meter strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.life-ready { font-size: 11px; color: var(--muted); }
+.life-refill-copy { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; color: var(--muted); font-size: 11px; }
+.life-refill-copy b { margin-left: 5px; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.life-refill-copy small { font-size: 11px; }
+.life-cover { position: absolute; inset: 0; z-index: 7; background: var(--surface, #fff); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; text-align: center; }
+.life-cover > svg { width: 90px; height: 90px; }
+.life-cover h2 { font-size: 19px; line-height: 1.4; margin: 8px 0; font-weight: 500; }
+.life-cover p { font-size: 12px; color: var(--muted); margin: 3px 0; }
+.life-cover-timer { font-size: 30px; font-weight: 500; font-variant-numeric: tabular-nums; margin: 3px 0; }
+.life-details { padding: 12px 16px; background: var(--soft); border-radius: 14px; margin: 18px 0; }
+.life-details p { display: flex; justify-content: space-between; gap: 14px; font-size: 13px; }
+.life-details strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cell.life-mistake::after { content: ""; position: absolute; inset: 2px; border: 2px solid #a75261; border-radius: 6px; pointer-events: none; animation: life-mistake 450ms ease-out; z-index: 6; }
+@keyframes life-mistake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 65% { transform: translateX(2px); } }
+:root[data-theme="night"] .life-full { color: #e3a5b2; fill: #cb8696; }
+@media (max-width: 355px) { .life-cover > svg { width: 65px; height: 65px; } .life-cover h2 { font-size: 16px; } .lives-meter { gap: 7px; padding-inline: 9px; } }
+@media (prefers-reduced-motion: reduce) { .cell.life-mistake::after { animation: none !important; } }
+[data-quiet-motion="true"] .cell.life-mistake::after { animation: none !important; }

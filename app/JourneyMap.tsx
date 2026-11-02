@@ -87,15 +87,20 @@ export default function JourneyMap({
           <div className="map-totals">
             <span>
               <Star size={16} />
-              {stars} / 360 stars
+              {stars} / {LEVELS.length * 3} stars
             </span>
             <span>
               <Check size={16} />
-              {done} / 120 puzzles
+              {done} / {LEVELS.length} puzzles
             </span>
           </div>
         </div>
       </div>
+      {chapterIndex !== CHAPTERS.length - 1 && (
+        <button className="text-button expert-entry" onClick={() => setChapter(CHAPTERS.length - 1)}>
+          Ready for a challenge? Explore Expert <ArrowRight size={16} />
+        </button>
+      )}
       <div className="map-gift-progress">
         <Gift size={23} />
         <div>
@@ -125,6 +130,7 @@ export default function JourneyMap({
             Chapter {chapterIndex + 1} · {levels[0].size} × {levels[0].size}
           </p>
           <h3>{chapter.name}</h3>
+          {chapter.end > 120 && <p className="expert-description">No single-square colors. More deductions before your first cat.</p>}
         </div>
         <button
           className="icon-button"

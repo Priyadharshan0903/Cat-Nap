@@ -1,6 +1,9 @@
 import rawLevels from "./levels.json" with { type: "json" };
+import expertLevels from "./expert-levels.json" with { type: "json" };
 import type { Puzzle } from "./puzzle.ts";
-export const LEVELS = rawLevels as Puzzle[];
+export const CLASSIC_LEVELS = rawLevels as Puzzle[];
+export const EXPERT_LEVELS = expertLevels as Puzzle[];
+export const LEVELS = [...CLASSIC_LEVELS, ...EXPERT_LEVELS];
 export function dayKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -73,5 +76,12 @@ export const CHAPTERS = [
     start: 97,
     end: 120,
     color: "#bbc6c7",
+  },
+  {
+    name: "The midnight conservatory",
+    description: "Deeper deductions for curious minds.",
+    start: 121,
+    end: 132,
+    color: "#a5c2b2",
   },
 ];

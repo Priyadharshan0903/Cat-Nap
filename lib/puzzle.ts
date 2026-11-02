@@ -1,4 +1,4 @@
-export type Difficulty = "Easy" | "Medium" | "Hard";
+export type Difficulty = "Easy" | "Medium" | "Hard" | "Expert";
 export type Puzzle = {
   id: string;
   number: number;
@@ -102,6 +102,7 @@ export function deduce(
   const { size, regions } = puzzle;
   const cats = [...placed],
     steps: { cell: number; explanation: string }[] = [];
+  const metrics = { initialSingles: 0, exclusionRounds: 0, openingExclusionRounds: 0 };
   let candidates = Array.from({ length: size * size }, (_, i) => i).filter(
     (c) => !cats.some((a) => incompatible(a, c, puzzle)),
   );
@@ -126,8 +127,9 @@ export function deduce(
           explanation: `Column ${i + 1} has only one square left that can hold a cat.`,
         });
     }
+    if (round === 0) metrics.initialSingles = groups.filter((g) => g.cells.length === 1).length;
     if (groups.some((g) => g.cells.length === 0))
-      return { cats, steps, solved: false };
+      return { cats, steps, solved: false, metrics };
     const single = groups.find((g) => g.cells.length === 1);
     if (single) {
       const cell = single.cells[0];
@@ -150,8 +152,10 @@ export function deduce(
       }
     }
     if (!changed) break;
+    metrics.exclusionRounds++;
+    if (cats.length === placed.length) metrics.openingExclusionRounds++;
   }
-  return { cats, steps, solved: cats.length === size };
+  return { cats, steps, solved: cats.length === size, metrics };
 }
 
 export function nextHint(puzzle: Puzzle, board: Board): Hint | null {

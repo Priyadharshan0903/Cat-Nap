@@ -1,4 +1,5 @@
 import type { Board } from "./puzzle.ts";
+import { emptyLives, mergeLifeLedgers, type LifeLedger } from "./lives.ts";
 import {
   emptyLedger,
   mergeLedgers,
@@ -37,6 +38,7 @@ export type Progress = {
   completed: Record<string, Completion>;
   settings: Settings;
   rewards?: RewardLedger;
+  lives?: LifeLedger;
 };
 export const CAT_IDS = ["mochi", "ginger", "luna", "olive", "peaches", "cloud"];
 export function emptyProgress(): Progress {
@@ -45,6 +47,7 @@ export function emptyProgress(): Progress {
     games: {},
     completed: {},
     rewards: emptyLedger(),
+    lives: emptyLives(),
     settings: {
       cat: "mochi",
       theme: "garden",
@@ -87,6 +90,7 @@ export function mergeProgress(a: Progress, b: Progress): Progress {
     games,
     completed,
     rewards: mergeLedgers(a.rewards, b.rewards),
+    lives: mergeLifeLedgers(a.lives, b.lives),
     settings:
       b.settings.updatedAt > a.settings.updatedAt ? b.settings : a.settings,
   };
@@ -121,6 +125,9 @@ export function validProgress(value: unknown): value is Progress {
     object(v) &&
     counter((v as { hints: unknown }).hints) &&
     counter((v as { cats: unknown }).cats);
+  if (p.lives !== undefined &&
+      (!object(p.lives) || !object(p.lives.losses) || Object.keys(p.lives.losses).length > 100_000 ||
+       !Object.entries(p.lives.losses).every(([key, at]) => id(key) && finite(at)))) return false;
   if (
     p.rewards !== undefined &&
     (!object(p.rewards) ||

@@ -24,6 +24,7 @@ import {
   Grid2X2,
   Map,
   Gift,
+  Heart,
   Star,
   Lightbulb,
   LockKeyhole,
@@ -46,7 +47,7 @@ import {
   type Board,
   type Puzzle,
 } from "../lib/puzzle";
-import { CHAPTERS, dayKey, getPuzzle, LEVELS } from "../lib/catalog";
+import { CHAPTERS, dayKey, getPuzzle, LEVELS, EXPERT_LEVELS } from "../lib/catalog";
 import {
   mergeProgress,
   saveForLevel,
@@ -58,8 +59,10 @@ import { Cat, CATS, WindowScene } from "./Cat";
 import Modal from "./Modal";
 import JourneyMap from "./JourneyMap";
 import HintPanel from "./HintPanel";
+import LivesMeter from "./LivesMeter";
+import { lifeStatus, recoverySchedule, statusFromSchedule, recordLifeLoss, lifeCountdown } from "../lib/lives";
 import { REGION_COLORS } from "../lib/palette";
-import { tapCell, markCell, catCell, markStroke, strokeCells, type Tap } from "../lib/gestures";
+import { tapCell, markCell, catCell, markStroke, paintStroke, strokeCells, type Tap } from "../lib/gestures";
 import {
   emptyAssists,
   earnedRewards,
@@ -76,7 +79,7 @@ import { coachingHint, type CoachingHint } from "../lib/coaching";
 import { downloadBackup, parseBackup, readBackupFile } from "../lib/backup";
 
 const COLORS = REGION_COLORS;
-type Stroke = { pointer: number; capture: HTMLButtonElement; first: number; last: number; cells: Set<number>; before: Board; active: boolean; preview: Board };
+type Stroke = { pointer: number; capture: HTMLButtonElement; erase: boolean; first: number; last: number; cells: Set<number>; before: Board; active: boolean; preview: Board };
 const THEMES = [
   { id: "garden", name: "Garden", detail: "Soft greens", swatches: ["#f8f9f4", "#45694e", "#bdd8cf"] },
   { id: "ocean", name: "Seaside", detail: "Cool blues", swatches: ["#f2f7fa", "#346278", "#bfd8e5"] },
@@ -95,6 +98,7 @@ type Dialog =
   | "win"
   | "rewards"
   | "refill"
+  | "lives"
   | null;
 
 export default function Game() {
@@ -117,6 +121,11 @@ export default function Game() {
   const [refillKind, setRefillKind] = useState<AssistKind>("hints");
   const [winGift, setWinGift] = useState<Tokens>({ hints: 0, cats: 0 });
   const balance = rewardBalance(progress);
+  const [lifeNow, setLifeNow] = useState(() => Date.now());
+  const refillSchedule = useMemo(() => recoverySchedule(progress.lives), [progress.lives]);
+  const lives = statusFromSchedule(refillSchedule, lifeNow);
+  const noLives = lives.count === 0;
+  const [mistakeCell, setMistakeCell] = useState<number | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null),
     [hint, setHint] = useState<CoachingHint | null>(null);
   const [paused, setPaused] = useState(false),
@@ -165,13 +174,13 @@ export default function Game() {
       value: Board,
       target: Puzzle = puzzle,
       seconds = elapsedRef.current,
-      options: { complete?: boolean; spend?: AssistKind } = {},
+      options: { complete?: boolean; spend?: AssistKind; loss?: { id: string; at: number } } = {},
     ) => {
       if (!device) return;
       commit((original) => {
-        const old = options.spend
-          ? (spendAssist(original, device, options.spend) ?? original)
-          : original;
+        const rewarded = options.spend ? (spendAssist(original, device, options.spend) ?? original) : original;
+        const lifeLedger = options.loss ? recordLifeLoss(rewarded.lives, options.loss.at, options.loss.id) : null;
+        const old = lifeLedger ? { ...rewarded, lives: lifeLedger } : rewarded;
         const id = activeSave.current?.levelId === target.id ? activeSave.current.id : `${target.id}:${device}`,
           previous = old.games[id];
         const game: GameSave = {
@@ -243,6 +252,7 @@ export default function Game() {
     elapsedRef.current = safe ? saved.elapsed : 0;
     setElapsed(elapsedRef.current);
     setLevelId(target.id);
+    setMistakeCell(null);
     setHistory([]);
     setHint(null);
     setPaused(false);
@@ -291,6 +301,7 @@ export default function Game() {
   }, [toast]);
   useEffect(() => {
     const clock = setInterval(() => {
+      setLifeNow(Date.now());
       const day = dayKey();
       setToday(day);
       if (
@@ -298,6 +309,7 @@ export default function Game() {
         paused ||
         solved ||
         dialog ||
+        lifeStatus(progressRef.current.lives, Date.now()).count === 0 ||
         document.visibilityState !== "visible"
       )
         return;
@@ -306,13 +318,18 @@ export default function Game() {
       if (elapsedRef.current % 15 === 0) writeBoard(boardRef.current);
     }, 1000);
     const save = () => {
+      setLifeNow(Date.now());
       if (ready && initialized.current) writeBoard(boardRef.current);
     };
     addEventListener("pagehide", save);
+    addEventListener("pageshow", save);
+    addEventListener("focus", save);
     document.addEventListener("visibilitychange", save);
     return () => {
       clearInterval(clock);
       removeEventListener("pagehide", save);
+      removeEventListener("pageshow", save);
+      removeEventListener("focus", save);
       document.removeEventListener("visibilitychange", save);
     };
   }, [ready, paused, solved, dialog, writeBoard]);
@@ -328,7 +345,35 @@ export default function Game() {
       .catch(() => setOfflineReady(false));
   }, []);
 
-  const change = (value: Board, record = true, spending?: AssistKind) => {
+  useEffect(() => {
+    if (mistakeCell === null) return;
+    const timer = setTimeout(() => setMistakeCell(null), 1200);
+    return () => clearTimeout(timer);
+  }, [mistakeCell]);
+  const change = (value: Board, record = true, spending?: AssistKind,
+    context: { rollback?: Board; checkCats?: boolean } = {}) => {
+    if (context.checkCats !== false && lifeStatus(progressRef.current.lives, Date.now()).count === 0) {
+      tapRef.current = null;
+      setDialog("lives");
+      return;
+    }
+    const prior = boardRef.current;
+    const wrong = context.checkCats === false ? undefined :
+      value.cats.find((cell) => !prior.cats.includes(cell) && !puzzle.solution.includes(cell));
+    if (wrong !== undefined) {
+      const rollback = context.rollback ?? prior;
+      tapRef.current = null;
+      setHint(null);
+      setMistakeCell(wrong);
+      if (context.rollback) setHistory((old) => old.slice(0, -1));
+      boardRef.current = rollback;
+      setBoard(rollback);
+      const at = Date.now();
+      writeBoard(rollback, puzzle, elapsedRef.current, { loss: { id: crypto.randomUUID(), at } });
+      setLifeNow(at);
+      setToast("That square is not this cat’s home. One life lost; the refill timer is running.");
+      return;
+    }
     if (spending && rewardBalance(progressRef.current)[spending] < 1) {
       setRefillKind(spending);
       setDialog("refill");
@@ -361,7 +406,7 @@ export default function Game() {
     }
   };
   const cellAction = (cell: number, action: "cat" | "mark") => {
-    if (!ready || paused || solved) return;
+    if (!ready || paused || solved || lifeStatus(progressRef.current.lives, Date.now()).count === 0) return;
     tapRef.current = null;
     change(
       action === "cat"
@@ -370,7 +415,8 @@ export default function Game() {
     );
   };
   const handleTap = (cell: number, pointer: boolean) => {
-    if (!ready || paused || solved) return;
+    if (!ready || paused || solved || lifeStatus(progressRef.current.lives, Date.now()).count === 0) return;
+    const beforePair = tapRef.current?.before;
     const result = tapCell(
       boardRef.current,
       cell,
@@ -379,14 +425,14 @@ export default function Game() {
       pointer,
     );
     tapRef.current = result.pending;
-    change(result.board, !result.double);
+    change(result.board, !result.double, undefined, { rollback: result.double ? beforePair : undefined });
   };
   function beginStroke(event: ReactPointerEvent<HTMLButtonElement>, cell: number) {
     if (event.isPrimary === false || event.button !== 0) return;
     suppressClick.current = false;
-    if (!ready || paused || solved || dialog || progress.settings.dragMark === false) return;
+    if (!ready || paused || solved || dialog || lifeStatus(progressRef.current.lives, Date.now()).count === 0 || progress.settings.dragMark === false) return;
     const before = boardRef.current;
-    strokeRef.current = { pointer: event.pointerId, capture: event.currentTarget, first: cell, last: cell, cells: new Set([cell]), before, preview: before, active: false };
+    strokeRef.current = { pointer: event.pointerId, capture: event.currentTarget, erase: before.marks.includes(cell), first: cell, last: cell, cells: new Set([cell]), before, preview: before, active: false };
     // Touch already captures to this tile implicitly. Keep that same target for
     // the whole gesture; transferring capture fires lostpointercapture on mobile.
     // Captured movement/up events still bubble to the board for coordinate hit testing.
@@ -409,7 +455,7 @@ export default function Game() {
     }
     for (const c of strokeCells(stroke.last, cell, puzzle.size)) stroke.cells.add(c);
     stroke.last = cell;
-    stroke.preview = markStroke(stroke.before, stroke.cells);
+    stroke.preview = paintStroke(stroke.before, stroke.cells, stroke.erase);
     setBoard(stroke.preview);
     event.preventDefault();
   }
@@ -441,10 +487,10 @@ export default function Game() {
     const previous = history[history.length - 1];
     if (!previous) return;
     setHistory((old) => old.slice(0, -1));
-    change(previous, false);
+    change(previous, false, undefined, { checkCats: false });
   };
   const showHint = (freeCorrection = false) => {
-    if (solved || paused || !ready) return;
+    if (solved || paused || !ready || lifeStatus(progressRef.current.lives, Date.now()).count === 0) return;
     tapRef.current = null;
     const value = coachingHint(puzzle, boardRef.current, progressRef.current.settings.autoMark);
     if (!value) {
@@ -475,7 +521,7 @@ export default function Game() {
     return () => clearTimeout(timer);
   }, [appliedHintCells]);
   const applyHint = () => {
-    if (!hint || paused || solved || !ready) return;
+    if (!hint || paused || solved || !ready || lifeStatus(progressRef.current.lives, Date.now()).count === 0) return;
     const current = boardRef.current;
     if (hint.kind === "remove")
       change({ ...current, cats: current.cats.filter((c) => !hint.cells.includes(c)) });
@@ -488,7 +534,7 @@ export default function Game() {
 
   };
   const findCat = () => {
-    if (!ready || paused || solved) return;
+    if (!ready || paused || solved || lifeStatus(progressRef.current.lives, Date.now()).count === 0) return;
     const wrong = boardRef.current.cats.find(
       (c) => !puzzle.solution.includes(c),
     );
@@ -758,8 +804,13 @@ export default function Game() {
               className="text-button browse-button"
               onClick={() => setDialog("levels")}
             >
-              All 120 levels <ArrowRight size={16} />
+              All {LEVELS.length} levels <ArrowRight size={16} />
             </button>
+            {!daily && puzzle.difficulty !== "Expert" && (
+              <button className="text-button expert-entry" onClick={() => openPuzzle(EXPERT_LEVELS.find((level) => !progress.completed[level.id]) ?? EXPERT_LEVELS[0])}>
+                Try Expert puzzles <ArrowRight size={16} />
+              </button>
+            )}
             <div className="journey-note">
               <Flower2 size={23} strokeWidth={1.2} />
               <p>
@@ -800,14 +851,15 @@ export default function Game() {
                   className="icon-button"
                   onClick={() => setPaused(!paused)}
                   aria-label={paused ? "Resume puzzle" : "Pause puzzle"}
-                  disabled={solved}
+                  disabled={solved || noLives}
                 >
                   {paused ? <Play size={16} /> : <Pause size={16} />}
                 </button>
               </div>
             </div>
+            {ready && <LivesMeter status={lives} onOpen={() => setDialog("lives")} />}
             <AnimatePresence>
-              {hint && !paused && !dialog && (
+              {hint && !paused && !dialog && !noLives && (
                 <HintPanel
                   key="hint"
                   hint={hint}
@@ -858,7 +910,7 @@ export default function Game() {
                         ref={(el) => {
                           buttons.current[cell] = el;
                         }}
-                        className={`cell ${hasCat ? "has-cat" : ""} ${badCells.includes(cell) ? "conflict" : ""} ${hint?.cells.includes(cell) ? "hinted" : ""} ${hint && !hint.focus.includes(cell) ? "hint-dimmed" : ""} ${hint?.focus.includes(cell) ? "hint-focus" : ""} ${settledRegions.has(region) ? "region-settled" : ""}`}
+                        className={`cell ${mistakeCell === cell ? "life-mistake" : ""} ${hasCat ? "has-cat" : ""} ${badCells.includes(cell) ? "conflict" : ""} ${hint?.cells.includes(cell) ? "hinted" : ""} ${hint && !hint.focus.includes(cell) ? "hint-dimmed" : ""} ${hint?.focus.includes(cell) ? "hint-focus" : ""} ${settledRegions.has(region) ? "region-settled" : ""}`}
                         style={{
                           backgroundColor: COLORS[region],
                           "--cell-border-top": `${topBorder}px`,
@@ -878,7 +930,7 @@ export default function Game() {
                         aria-pressed={hasCat || marked}
                         tabIndex={cell === focusedCell ? 0 : -1}
                         onFocus={() => setFocusedCell(cell)}
-                        disabled={!ready || paused}
+                        disabled={!ready || paused || noLives}
                         onPointerDown={(event) => beginStroke(event, cell)}
                         onClick={(event) => {
                           const pointerClick = event.detail !== 0 || !!(event.nativeEvent as PointerEvent).pointerType;
@@ -948,6 +1000,16 @@ export default function Game() {
                     </button>
                   </div>
                 )}
+                {ready && noLives && !paused && (
+                  <div className="life-cover" role="region" aria-label="Waiting for a life">
+                    <Cat kind={cat.id} sleeping />
+                    <h2>A little time to recharge.</h2>
+                    <p>Your next life returns in</p>
+                    <strong className="life-cover-timer" role="timer" aria-live="off">{lifeCountdown(lives.nextIn)}</strong>
+                    <p>One life every 30 minutes, up to three.</p>
+                    <button className="text-button" onClick={() => setDialog("lives")}>View refill details <Heart size={15} /></button>
+                  </div>
+                )}
                 {!ready && (
                   <div className="pause-cover">
                     <Cat kind="mochi" sleeping />
@@ -964,7 +1026,7 @@ export default function Game() {
                   <span className="tap-dot double-dot" />
                   Double tap <PawPrint size={14} /> cat
                 </span>
-                {progress.settings.dragMark !== false && <span className="drag-guide">Drag to mark Xs</span>}
+                {progress.settings.dragMark !== false && <span className="drag-guide">Drag from empty to mark · from X to erase</span>}
               </div>
             </motion.div>
             <div className="game-actions">
@@ -982,7 +1044,7 @@ export default function Game() {
               </button>
               <button
                 onClick={() => showHint()}
-                disabled={!ready || solved || paused}
+                disabled={!ready || solved || paused || noLives}
               >
                 <Lightbulb size={20} />
                 <span>
@@ -992,7 +1054,7 @@ export default function Game() {
               <button
                 className="find-cat"
                 onClick={findCat}
-                disabled={!ready || solved || paused}
+                disabled={!ready || solved || paused || noLives}
               >
                 <PawPrint size={20} />
                 <span>
@@ -1080,7 +1142,7 @@ export default function Game() {
         <footer className="site-footer">
           <span>A little room for logic.</span>
           <span>
-            {completedLevels} / 120 levels completed
+            {completedLevels} / {LEVELS.length} levels completed
             <span className="footer-divider">·</span>
             {offlineReady ? "Ready for offline play" : "Made for quiet moments"}
           </span>
@@ -1088,17 +1150,31 @@ export default function Game() {
         <AnimatePresence>
           {toast && (
             <motion.div
-              className="toast"
-              role="status"
+              className="toast-position"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
             >
-              {toast}
+              <div className="toast" role="status">{toast}</div>
             </motion.div>
           )}
         </AnimatePresence>
 
+        {dialog === "lives" && (
+          <Modal title="Three little chances" onClose={() => setDialog(null)}>
+            <LivesMeter status={lives} />
+            <p className="modal-intro">Start with three lives. An incorrect cat placement costs one life and is removed from the board. Correct placements, X marks, and erasing are free.</p>
+            <div className="life-details">
+              {lives.count < 3 ? <>
+                <p>Next life <strong role="timer" aria-live="off">{lifeCountdown(lives.nextIn)}</strong></p>
+                <p>Back to all three <strong role="timer" aria-live="off">{lifeCountdown(lives.fullIn)}</strong></p>
+              </> : <p>All three lives are ready.</p>}
+            </div>
+            <p className="setting-copy">One life returns every 30 minutes. Two lost together take one hour to fully refill; three take 90 minutes. The countdown continues while Catnap is closed. At zero, new moves wait for the next life.</p>
+            <p className="setting-copy">Undo, restarting, and changing levels keep your life balance and refill schedule.</p>
+            <button className="primary-button full-width" onClick={() => setDialog(null)}>Back to your puzzle <ArrowRight size={16} /></button>
+          </Modal>
+        )}
         {(dialog === "rewards" || dialog === "refill") && (
           <Modal
             title={
@@ -1280,7 +1356,7 @@ export default function Game() {
                   {
                     key: "dragMark",
                     title: "Drag to mark Xs",
-                    description: "Paint Xs across squares in one stroke. Turn off to scroll over the board.",
+                    description: "Start on empty to mark, or on an X to erase. Turn off to scroll over the board.",
                   },
                   {
                     key: "patterns",
@@ -1443,13 +1519,14 @@ export default function Game() {
               <h3>A helping paw is always here.</h3>
               <p>
                 <strong>Single tap</strong> to mark an X; tap the X again to
-                clear it. <strong>Drag</strong> to paint Xs across cells; one Undo clears the stroke. <strong>Double tap</strong> to place a cat, or double
+                clear it. <strong>Drag</strong> from an empty square to paint Xs, or from an X to erase them; one Undo reverses the stroke. <strong>Double tap</strong> to place a cat, or double
                 tap a cat to remove it. Cats match their colored regions.{" "}
                 <strong>Hint</strong> focuses a deduction and can mark impossible squares;{" "}
                 <strong>Find a cat</strong> places one for you. Your helping-paw
                 counts grow as you finish puzzles, with free refills whenever
                 you run out.
               </p>
+              <p><strong>Three lives:</strong> an incorrect cat costs one life. A life returns every 30 minutes, even while the app is closed. At zero lives, wait for the countdown. X marks are notes and do not spend lives.</p>
               <p className="keyboard-note">
                 On Mac: arrow keys move, C places a cat, X marks a square, and
                 Delete clears it. Right-click also marks an X.

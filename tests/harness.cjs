@@ -12,13 +12,18 @@ const asset = fs
 const bundle = fs.readFileSync("dist/assets/" + asset, "utf8");
 const errors = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function launch(saved = {}, isolated = false) {
+async function launch(saved = {}, isolated = false, clock) {
   const dom = new JSDOM(html, {
     url: "http://localhost:8765/catnap/game/dist/",
     runScripts: "dangerously",
     pretendToBeVisual: true,
   });
   const w = dom.window;
+  if (clock) {
+    let now = clock.now;
+    w.Date.now = () => now;
+    w.__setNow = (value) => { now = value; };
+  }
   w.indexedDB = isolated ? new IDBFactory() : indexedDB;
   w.IDBKeyRange = IDBKeyRange;
   w.structuredClone = structuredClone;

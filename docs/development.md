@@ -41,12 +41,12 @@ After an import, the backup’s last puzzle opens so the transfer is visible. Ex
 ## Controls
 
 - **Single tap** to mark an X, and tap the X again to clear it. **Double tap** to place a cat, or double tap an existing cat to clear it. Cats take the color of their region; the selected companion stays beside the board.
-- **Drag** across cells to paint Xs with a mouse or one finger. No long press is needed. Existing cats and Xs stay in place; one Undo restores the whole stroke. Turn off **Drag to mark Xs** in Settings to scroll over the board on touchscreens.
+- **Drag** across cells to paint Xs with a mouse or one finger. No long press is needed. Start on empty to add Xs, or on an X to erase crossed marks. The stroke keeps that intent even when you revisit cells. Cats stay in place; one Undo restores the whole stroke. Turn off **Drag to mark Xs** in Settings to scroll over the board on touchscreens.
 - Choose **Garden**, **Seaside**, **Night**, or **Device** in Settings. Device follows system light/dark changes. Theme and drag preferences are included in backups.
 - Right-click marks an X. Arrow keys move focus; C places a cat, X marks a square, Delete clears it.
 - **Hint** explains an exclusion, focuses the relevant rows, columns, or colors, and dims unrelated cells. You can optionally mark the excluded squares X; it never places a cat. Opening a new hint uses one token; reopening the same hint on the same board is free, including after reload. Applying it is optional. General observation hints without an action are free.
 - **Find a cat** places a correct cat; if an earlier cat makes the board unsolvable, it first helps remove that cat.
-- Open **Journey** or **All 120 levels** for the winding chapter map. Every level is open. There are no lives, paid assists, or waiting periods.
+- Open **Journey** or **All 132 levels** for the winding chapter map. Every level is open. Lives recharge one at a time every 30 minutes after an incorrect cat placement. Assists remain free of ads and payment.
 - Three cats are available immediately; Olive, Peaches, and Cloud arrive after 8, 24, and 48 distinct puzzles.
 
 ## Useful gifts and stars
@@ -55,7 +55,7 @@ Start with **10 hint tokens and 5 Find a cat tokens**. Each new puzzle earns **1
 
 When a pocket runs out, a free refill offers **3 hints** or **1 cat assist**, with no ads, payment, or waiting. Actionable hints are charged when first revealed, and cat assists when they place a cat. A misplaced-cat correction from Find a cat is free. Undo does not refund assistance; restarting begins a new star attempt without refunding spent tokens.
 
-Earn **1 star** for completing a puzzle, **2** without Find a cat, and **3** without either assist. Replays can improve best stars without repeating first-clear gifts. The map’s 360-star total covers the 120 regular levels. Existing v1 saves remain valid: previous completions receive their completion gifts, while old untracked star ratings show one confirmed completion star until replayed.
+Earn **1 star** for completing a puzzle, **2** without Find a cat, and **3** without either assist. Replays can improve best stars without repeating first-clear gifts. The map’s 396-star total covers all 132 regular levels. Existing v1 saves remain valid: previous completions receive their completion gifts, while old untracked star ratings show one confirmed completion star until replayed.
 
 Token spending and free refills use mergeable, device-specific counters. Importing the same or an older backup cannot repeatedly mint gifts, reset spending, or duplicate a refill. If independent offline devices overspend a shared starter balance before manual transfer, a free refill reconciles that deficit and adds the advertised amount.
 
@@ -67,7 +67,7 @@ npm run build
 npm run test:ui
 ```
 
-Tests verify all 120 puzzles have connected regions, exactly one solution, and a complete deduction path; they also cover daily transformations, hint corrections, backup merging, malformed imports, and persistence through the JSON journal and IndexedDB. Difficulty currently follows board size; it is not an independently calibrated human difficulty score.
+Tests verify all 132 puzzles have connected regions, exactly one solution, and a complete deduction path; they also cover daily transformations, hint corrections, backup merging, malformed imports, and persistence through the JSON journal and IndexedDB. Classic difficulty follows board size. Expert boards additionally require deeper deductions (no single-cell regions or initial singles, at least two opening exclusion rounds and four overall). These are solver heuristics rather than independently calibrated human difficulty scores.
 
 `npm run levels:generate` deterministically regenerates the reviewed pack; this can take a few minutes. Do not regenerate casually: changing a level's contents under an existing ID would invalidate existing saves. Publish changed boards under new IDs or provide an explicit migration.
 
@@ -87,3 +87,9 @@ The daily puzzle selects and transforms a board from the validated pack using th
 See `docs/architecture.md`, `docs/design.md`, and `docs/verification.md` for implementation decisions and verification limits.
 
 Version 1.2.1 fixes the mobile pointer-capture cancellation path. After deploying an update, reload once, then close Catnap tabs / the installed app and reopen it to let the waiting offline release activate. Keep **Settings → Drag to mark Xs** enabled on the phone; that preference is saved separately on each browser unless transferred in a backup.
+
+Use **Try Expert puzzles** to jump straight to levels 121–132, or select Chapter 6, The midnight conservatory, in Journey. No completion gate is required. Existing boards and daily arrangements remain unchanged. Update both devices before transferring a backup containing the new levels.
+
+Lives: start with three and lose one for an incorrect cat placement. A correct cat or an X note costs nothing. The next-life and full-recovery countdowns appear above the board; click the hearts for details. Refills are sequential, one every 30 minutes, and stop at three. At zero the board pauses until a life returns. Undo, Restart, level changes, closing the app, or importing an old backup do not reset local life receipts. The timer uses device time and continues while closed. Update both browsers to v1.4 before transferring life-enabled saves.
+
+The canonical local source is /Users/priyadharshan.senthil/Desktop/Projects/CatNap. Run the normal install, test, and build commands here.

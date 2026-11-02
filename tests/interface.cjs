@@ -44,7 +44,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   await sleep(400);
   assert.equal(w.document.querySelector(".hint-card") === null, true, "Escape dismisses the floating reason");
   assert.equal(w.document.querySelectorAll(".hint-dimmed").length, 0, "Dismiss also clears the spotlight");
-  const target = w.document.querySelector(".cell");
+  const target = w.document.querySelectorAll(".cell")[4];
   target.dispatchEvent(new w.MouseEvent("click", { bubbles: true, detail: 1 }));
   target.dispatchEvent(new w.MouseEvent("click", { bubbles: true, detail: 2 }));
   await sleep(60);
@@ -77,7 +77,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   );
   assert.match(
     w.document.querySelector(".site-footer").textContent,
-    /1 \/ 120/,
+    /1 \/ 132/,
   );
   assert.equal(
     new Set(
@@ -108,7 +108,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   assert.equal(w.document.querySelectorAll(".cell.has-cat").length, 5);
   assert.match(
     w.document.querySelector(".site-footer").textContent,
-    /1 \/ 120/,
+    /1 \/ 132/,
   );
   const walletBefore = JSON.parse(
     w.localStorage.getItem("catnap.save.v1"),
@@ -160,7 +160,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   await sleep(30);
   assert.ok(w.document.querySelector(".pause-cover"));
   await click(w, "Ready when you are");
-  await click(w, "All 120 levels");
+  await click(w, "All 132 levels");
   assert.ok(
     w.document.querySelector(".map-path path"),
     "A winding map connects the levels",
@@ -197,7 +197,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   assert.match(w.document.querySelector("h1").textContent, /Level 01/);
   assert.match(
     w.document.querySelector(".site-footer").textContent,
-    /2 \/ 120/,
+    /2 \/ 132/,
   );
   w.document.querySelector('[aria-label="Settings and backups"]').click();
   await sleep(30);
@@ -214,7 +214,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   );
   assert.match(
     w.document.querySelector(".site-footer").textContent,
-    /2 \/ 120/,
+    /2 \/ 132/,
   );
   dom.window.close();
   const oldLevel = JSON.parse(fs.readFileSync("lib/levels.json", "utf8"))[0];

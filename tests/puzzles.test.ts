@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LEVELS, dailyPuzzle } from "../lib/catalog.ts";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { LEVELS, CLASSIC_LEVELS, EXPERT_LEVELS, dailyPuzzle } from "../lib/catalog.ts";
 import {
   conflicts,
   deduce,
@@ -11,11 +13,11 @@ import {
   touch,
 } from "../lib/puzzle.ts";
 
-test("the pack has 120 distinct levels and a gradual range of board sizes", () => {
-  assert.equal(LEVELS.length, 120);
-  assert.equal(new Set(LEVELS.map((l) => l.id)).size, 120);
+test("the pack has 132 distinct levels and a gradual range of board sizes", () => {
+  assert.equal(LEVELS.length, 132);
+  assert.equal(new Set(LEVELS.map((l) => l.id)).size, 132);
   assert.deepEqual([...new Set(LEVELS.map((l) => l.size))], [5, 6, 7, 8, 9]);
-  assert.equal(new Set(LEVELS.map((l) => l.regions.join())).size, 120);
+  assert.equal(new Set(LEVELS.map((l) => l.regions.join())).size, 132);
 });
 for (const puzzle of LEVELS)
   test(`${puzzle.id}: connected regions, exactly one solution, logical hints`, () => {
@@ -92,5 +94,23 @@ test("a daily puzzle is deterministic and all transformations preserve its rules
     assert.ok(isSolved(p, p.solution));
     assert.equal(solutions(p).length, 1);
     assert.ok(deduce(p).solved);
+  }
+});
+
+test("the original 120 boards remain byte-for-byte unchanged for saved games and daily IDs", () => {
+  assert.equal(CLASSIC_LEVELS.length, 120);
+  assert.equal(createHash("sha256").update(readFileSync(new URL("../lib/levels.json", import.meta.url))).digest("hex"), "4d4b7c6566dec0edd7b6c1c1824f7ecd59f56b79332e141d79f6fc3b9d370b25");
+});
+test("Expert puzzles require deeper deductions, not just a larger board or a new label", () => {
+  assert.equal(EXPERT_LEVELS.length, 12);
+  assert.equal(new Set(EXPERT_LEVELS.map((p) => p.solution.join(","))).size, 12, "Expert boards do not repeat the same answer arrangement");
+  for (const p of EXPERT_LEVELS) {
+    assert.equal(p.size, 9);
+    assert.equal(p.difficulty, "Expert");
+    const result = deduce(p);
+    assert.equal(result.metrics.initialSingles, 0);
+    assert.ok(result.metrics.openingExclusionRounds >= 2);
+    assert.ok(result.metrics.exclusionRounds >= 4);
+    for (let r = 0; r < 9; r++) assert.ok(p.regions.filter((v) => v === r).length >= 2);
   }
 });
