@@ -47,7 +47,7 @@ import {
   type Board,
   type Puzzle,
 } from "../lib/puzzle";
-import { CHAPTERS, dayKey, getPuzzle, LEVELS, EXPERT_LEVELS } from "../lib/catalog";
+import { CHAPTERS, dayKey, getPuzzle, LEVELS, JOURNEY, stageNumber, chapterFor, chapterLevels, nextJourneyPuzzle, profileFor } from "../lib/catalog";
 import {
   mergeProgress,
   saveForLevel,
@@ -140,19 +140,15 @@ export default function Game() {
     playRef = useRef<HTMLDivElement>(null);
   const [today, setToday] = useState(() => dayKey());
   const daily = levelId.startsWith("daily-");
-  const chapter =
-    CHAPTERS.find((c) => puzzle.number >= c.start && puzzle.number <= c.end) ??
-    CHAPTERS[0];
+  const stage = stageNumber(puzzle.id);
+  const chapter = chapterFor(puzzle.id);
+  const currentChapterLevels = chapterLevels(CHAPTERS.indexOf(chapter));
+  const profile = useMemo(() => profileFor(puzzle), [puzzle]);
   const completedLevels = LEVELS.filter(
     (l) => !!progress.completed[l.id],
   ).length;
   const totalCompleted = Object.keys(progress.completed).length;
-  const chapterDone = LEVELS.filter(
-    (l) =>
-      l.number >= chapter.start &&
-      l.number <= chapter.end &&
-      progress.completed[l.id],
-  ).length;
+  const chapterDone = currentChapterLevels.filter((p) => progress.completed[p.id]).length;
   const cat = CATS.find((c) => c.id === progress.settings.cat) ?? CATS[0];
   const solved = isSolved(puzzle, board.cats);
   const badCells = conflicts(puzzle, board.cats);
@@ -160,9 +156,7 @@ export default function Game() {
     ? autoMarks(puzzle, board.cats)
     : [];
   const settledRegions = new Set(board.cats.filter((c) => puzzle.solution.includes(c) && !badCells.includes(c)).map((c) => puzzle.regions[c]));
-  const nextLevel =
-    LEVELS.find((l) => l.number > puzzle.number && !progress.completed[l.id]) ??
-    LEVELS.find((l) => !progress.completed[l.id]);
+  const nextLevel = nextJourneyPuzzle(levelId, progress.completed);
 
   const updateSettings = (value: Partial<Settings>) =>
     commit((old) => ({
@@ -663,7 +657,7 @@ export default function Game() {
             onClick={(e) => {
               e.preventDefault();
               openPuzzle(
-                LEVELS.find((l) => !progress.completed[l.id]) ?? LEVELS[0],
+                JOURNEY.find((l) => !progress.completed[l.id]) ?? LEVELS[0],
               );
             }}
           >
@@ -678,7 +672,7 @@ export default function Game() {
               onClick={() => {
                 if (daily)
                   openPuzzle(
-                    LEVELS.find((l) => !progress.completed[l.id]) ?? LEVELS[0],
+                    JOURNEY.find((l) => !progress.completed[l.id]) ?? LEVELS[0],
                   );
               }}
             >
@@ -779,22 +773,20 @@ export default function Game() {
             </div>
             {!daily && (
               <div className="level-trail" aria-label="Levels in this chapter">
-                {LEVELS.filter(
-                  (l) => l.number >= chapter.start && l.number <= chapter.end,
-                )
+                {currentChapterLevels
                   .slice(0, 12)
                   .map((l) => (
                     <button
                       key={l.id}
                       className={`${l.id === levelId ? "current" : ""} ${progress.completed[l.id] ? "complete" : ""}`}
-                      aria-label={`Level ${l.number}${progress.completed[l.id] ? ", completed" : ""}`}
+                      aria-label={`Level ${stageNumber(l.id)}${progress.completed[l.id] ? ", completed" : ""}`}
                       aria-current={l.id === levelId ? "step" : undefined}
                       onClick={() => openPuzzle(l)}
                     >
                       {progress.completed[l.id] ? (
                         <Check size={17} />
                       ) : (
-                        String(l.number).padStart(2, "0")
+                        String(stageNumber(l.id)).padStart(2, "0")
                       )}
                     </button>
                   ))}
@@ -806,11 +798,6 @@ export default function Game() {
             >
               All {LEVELS.length} levels <ArrowRight size={16} />
             </button>
-            {!daily && puzzle.difficulty !== "Expert" && (
-              <button className="text-button expert-entry" onClick={() => openPuzzle(EXPERT_LEVELS.find((level) => !progress.completed[level.id]) ?? EXPERT_LEVELS[0])}>
-                Try Expert puzzles <ArrowRight size={16} />
-              </button>
-            )}
             <div className="journey-note">
               <Flower2 size={23} strokeWidth={1.2} />
               <p>
@@ -840,8 +827,8 @@ export default function Game() {
                 <h1 id="game-title">
                   {daily
                     ? "Daily puzzle"
-                    : `Level ${String(puzzle.number).padStart(2, "0")}`}
-                  <span className="difficulty">{puzzle.difficulty}</span>
+                    : `Level ${String(stage).padStart(2, "0")}`}
+                  <span className="difficulty">{profile.difficulty}</span>
                 </h1>
               </div>
               <div className="timer">
@@ -857,6 +844,7 @@ export default function Game() {
                 </button>
               </div>
             </div>
+            <p className="puzzle-variety">{puzzle.size} × {puzzle.size} · {profile.focus} · {profile.shape}</p>
             {ready && <LivesMeter status={lives} onOpen={() => setDialog("lives")} />}
             <AnimatePresence>
               {hint && !paused && !dialog && !noLives && (
@@ -890,6 +878,7 @@ export default function Game() {
                     const stroke = strokeRef.current;
                     if (stroke && stroke.pointer === event.pointerId && event.target === stroke.capture) cancelStroke();
                   }}
+                  data-puzzle-id={puzzle.id}
                   role="group"
                   aria-label={`${puzzle.size} by ${puzzle.size} cat puzzle`}
                   style={{ "--size": puzzle.size } as CSSProperties}
@@ -1094,8 +1083,8 @@ export default function Game() {
             <div className="level-bottom-nav">
               <button
                 className="text-button"
-                disabled={daily || puzzle.number === 1}
-                onClick={() => openPuzzle(LEVELS[puzzle.number - 2])}
+                disabled={daily || stage === 1}
+                onClick={() => openPuzzle(JOURNEY[stage - 2])}
               >
                 <ChevronLeft size={15} />
                 Previous
@@ -1108,8 +1097,8 @@ export default function Game() {
               </button>
               <button
                 className="text-button"
-                disabled={daily || puzzle.number === LEVELS.length}
-                onClick={() => openPuzzle(LEVELS[puzzle.number])}
+                disabled={daily || stage === JOURNEY.length}
+                onClick={() => openPuzzle(JOURNEY[stage])}
               >
                 Next
                 <ChevronRight size={15} />

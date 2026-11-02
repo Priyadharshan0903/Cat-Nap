@@ -2355,3 +2355,9 @@ button:not(:disabled):active {
 @media (max-width: 355px) { .life-cover > svg { width: 65px; height: 65px; } .life-cover h2 { font-size: 16px; } .lives-meter { gap: 7px; padding-inline: 9px; } }
 @media (prefers-reduced-motion: reduce) { .cell.life-mistake::after { animation: none !important; } }
 [data-quiet-motion="true"] .cell.life-mistake::after { animation: none !important; }
+
+.puzzle-variety { font-size: 11px; color: var(--muted); margin: -7px 0 14px; line-height: 1.7; }
+.map-puzzle-info { display: block; font-size: 11px; line-height: 1.5; color: var(--muted); margin: 3px 0 1px; white-space: nowrap; }
+.map-chapter-nav .journey-description { max-width: 310px; font-size: 12px; margin: 8px auto 0; line-height: 1.65; }
+.map-stop { height: 124px; }
+.map-you-are-here { font-size: 11px; }

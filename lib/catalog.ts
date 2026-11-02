@@ -1,9 +1,28 @@
 import rawLevels from "./levels.json" with { type: "json" };
 import expertLevels from "./expert-levels.json" with { type: "json" };
+import varietyLevels from "./variety-levels.json" with { type: "json" };
+import journeyIds from "./journey.json" with { type: "json" };
+import { assessPuzzle } from "./difficulty.ts";
 import type { Puzzle } from "./puzzle.ts";
 export const CLASSIC_LEVELS = rawLevels as Puzzle[];
 export const EXPERT_LEVELS = expertLevels as Puzzle[];
-export const LEVELS = [...CLASSIC_LEVELS, ...EXPERT_LEVELS];
+export const VARIETY_LEVELS = varietyLevels as Puzzle[];
+// Permanent catalog order is separate from the player-facing journey.
+export const LEVELS = [...CLASSIC_LEVELS, ...EXPERT_LEVELS, ...VARIETY_LEVELS];
+const byId = new Map(LEVELS.map((p) => [p.id, p]));
+export const JOURNEY = journeyIds.map((id) => {
+  const puzzle = byId.get(id);
+  if (!puzzle) throw new Error("Unknown journey puzzle: " + id);
+  return puzzle;
+});
+const stages = new Map(JOURNEY.map((p, i) => [p.id, i + 1]));
+const profiles = new Map(LEVELS.map((p) => [p.id, assessPuzzle(p)]));
+export const profileFor = (puzzle: Puzzle) => profiles.get(puzzle.id) ?? assessPuzzle(puzzle);
+export const stageNumber = (id: string) => stages.get(id) ?? 1;
+export function nextJourneyPuzzle(id: string, completed: Record<string, unknown>) {
+  const after = stages.get(id) ?? 0;
+  return JOURNEY.slice(after).find((p) => !completed[p.id]) ?? JOURNEY.find((p) => !completed[p.id]);
+}
 export function dayKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -11,7 +30,7 @@ export function dailyPuzzle(day: string): Puzzle {
   const hash =
     [...day].reduce((v, c) => (Math.imul(v, 31) + c.charCodeAt(0)) | 0, 7) >>>
     0;
-  const base = LEVELS[36 + (hash % 60)];
+  const base = CLASSIC_LEVELS[36 + (hash % 60)];
   const n = base.size,
     rotate = hash % 4,
     mirror = hash % 2 === 0;
@@ -41,7 +60,7 @@ export function getPuzzle(id: string): Puzzle | undefined {
   }
   return LEVELS.find((l) => l.id === id);
 }
-export const CHAPTERS = [
+export const LEGACY_CHAPTERS = [
   {
     name: "The sunny windowsill",
     description: "Small steps, soft paws.",
@@ -85,3 +104,20 @@ export const CHAPTERS = [
     color: "#a5c2b2",
   },
 ];
+
+// Chapter gift slots stay stable; their original completion groups remain valid too.
+const ends = [12, 38, 70, 108, 138, 156];
+const descriptions = [
+  "Familiar steps, with a little variety.",
+  "Small boards, fresh ways to think.",
+  "A thoughtful mix of shapes and sizes.",
+  "A challenge, then a little breathing room.",
+  "Let the deductions lead you further.",
+  "Clever twists and quiet little victories.",
+];
+export const CHAPTERS = LEGACY_CHAPTERS.map((chapter, i) => ({
+  ...chapter, start: i ? ends[i - 1] + 1 : 1, end: ends[i], description: descriptions[i],
+}));
+export const chapterFor = (id: string) =>
+  CHAPTERS.find((chapter) => stageNumber(id) >= chapter.start && stageNumber(id) <= chapter.end) ?? CHAPTERS[0];
+export const chapterLevels = (index: number) => JOURNEY.slice(CHAPTERS[index].start - 1, CHAPTERS[index].end);

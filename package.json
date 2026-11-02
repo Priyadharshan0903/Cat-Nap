@@ -1,6 +1,6 @@
 {
   "name": "catnap",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,7 +14,7 @@
     "levels:expert": "node --experimental-strip-types tools/generate-expert.ts",
     "levels:generate": "node --experimental-strip-types tools/generate-levels.ts",
     "typecheck": "tsc --noEmit",
-    "test:ui": "node tests/interface.cjs && node tests/features.cjs && node tests/mobile.cjs && node tests/lives.cjs && node tests/offline.cjs"
+    "test:ui": "node tests/interface.cjs && node tests/features.cjs && node tests/mobile.cjs && node tests/journey.cjs && node tests/lives.cjs && node tests/offline.cjs"
   },
   "dependencies": {
     "@fontsource/manrope": "^5.2.8",

@@ -13,11 +13,11 @@ import {
   touch,
 } from "../lib/puzzle.ts";
 
-test("the pack has 132 distinct levels and a gradual range of board sizes", () => {
-  assert.equal(LEVELS.length, 132);
-  assert.equal(new Set(LEVELS.map((l) => l.id)).size, 132);
+test("the pack has 156 distinct levels and a gradual range of board sizes", () => {
+  assert.equal(LEVELS.length, 156);
+  assert.equal(new Set(LEVELS.map((l) => l.id)).size, 156);
   assert.deepEqual([...new Set(LEVELS.map((l) => l.size))], [5, 6, 7, 8, 9]);
-  assert.equal(new Set(LEVELS.map((l) => l.regions.join())).size, 132);
+  assert.equal(new Set(LEVELS.map((l) => l.regions.join())).size, 156);
 });
 for (const puzzle of LEVELS)
   test(`${puzzle.id}: connected regions, exactly one solution, logical hints`, () => {

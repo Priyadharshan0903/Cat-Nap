@@ -102,7 +102,7 @@ export function deduce(
   const { size, regions } = puzzle;
   const cats = [...placed],
     steps: { cell: number; explanation: string }[] = [];
-  const metrics = { initialSingles: 0, exclusionRounds: 0, openingExclusionRounds: 0 };
+  const metrics = { initialSingles: 0, exclusionRounds: 0, openingExclusionRounds: 0, lineExclusions: 0, neighborExclusions: 0 };
   let candidates = Array.from({ length: size * size }, (_, i) => i).filter(
     (c) => !cats.some((a) => incompatible(a, c, puzzle)),
   );
@@ -147,6 +147,11 @@ export function deduce(
           !group.cells.every((a) => incompatible(a, c, puzzle)),
       );
       if (next.length < candidates.length) {
+        for (const c of candidates.filter((v) => !next.includes(v))) {
+          const lineOnly = group.cells.every((a) =>
+            Math.floor(a / size) === Math.floor(c / size) || a % size === c % size || regions[a] === regions[c]);
+          if (lineOnly) metrics.lineExclusions++; else metrics.neighborExclusions++;
+        }
         candidates = next;
         changed = true;
       }

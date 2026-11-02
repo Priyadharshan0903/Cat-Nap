@@ -10,8 +10,8 @@ import {
   Star,
   Sun,
 } from "lucide-react";
-import { CHAPTERS, LEVELS } from "../lib/catalog";
-import { CHAPTER_GIFT, chapterFinished, rewardBalance } from "../lib/rewards";
+import { CHAPTERS, LEVELS, JOURNEY, chapterFor, chapterLevels, stageNumber, profileFor } from "../lib/catalog";
+import { CHAPTER_GIFT, chapterFinished, chapterGiftEarned, rewardBalance } from "../lib/rewards";
 import type { Progress } from "../lib/progress";
 import type { Puzzle } from "../lib/puzzle";
 import { Cat } from "./Cat";
@@ -30,19 +30,14 @@ export default function JourneyMap({
 }) {
   const current =
     LEVELS.find((l) => l.id === currentId) ??
-    LEVELS.find((l) => !progress.completed[l.id]) ??
+    JOURNEY.find((l) => !progress.completed[l.id]) ??
     LEVELS[0];
   const activeId = current.id;
-  const [chapterIndex, setChapter] = useState(() =>
-    CHAPTERS.findIndex(
-      (c) => current.number >= c.start && current.number <= c.end,
-    ),
-  );
-  const chapter = CHAPTERS[chapterIndex],
-    canvas = useRef<HTMLDivElement>(null);
-  const levels = LEVELS.filter(
-    (l) => l.number >= chapter.start && l.number <= chapter.end,
-  );
+  const [chapterIndex, setChapter] = useState(() => CHAPTERS.indexOf(chapterFor(current.id)));
+  const chapter = CHAPTERS[chapterIndex], canvas = useRef<HTMLDivElement>(null);
+  const levels = chapterLevels(chapterIndex);
+  const minimumSize = Math.min(...levels.map((p) => p.size)), maximumSize = Math.max(...levels.map((p) => p.size));
+  const giftEarned = chapterGiftEarned(progress, chapterIndex);
   const done = LEVELS.filter((l) => progress.completed[l.id]).length;
   const stars = LEVELS.reduce(
     (sum, l) =>
@@ -57,9 +52,9 @@ export default function JourneyMap({
   const nodes = levels.map((level, i) => ({
     level,
     x: xPattern[i % xPattern.length],
-    y: 90 + i * 120,
+    y: 90 + i * 140,
   }));
-  const height = nodes.length * 120 + 170;
+  const height = nodes.length * 140 + 170;
   const path = nodes
     .map((node, i) =>
       i === 0
@@ -96,11 +91,6 @@ export default function JourneyMap({
           </div>
         </div>
       </div>
-      {chapterIndex !== CHAPTERS.length - 1 && (
-        <button className="text-button expert-entry" onClick={() => setChapter(CHAPTERS.length - 1)}>
-          Ready for a challenge? Explore Expert <ArrowRight size={16} />
-        </button>
-      )}
       <div className="map-gift-progress">
         <Gift size={23} />
         <div>
@@ -127,10 +117,10 @@ export default function JourneyMap({
         </button>
         <div>
           <p>
-            Chapter {chapterIndex + 1} · {levels[0].size} × {levels[0].size}
+            Chapter {chapterIndex + 1} · {minimumSize} × {minimumSize}{maximumSize !== minimumSize && <> – {maximumSize} × {maximumSize}</>}
           </p>
           <h3>{chapter.name}</h3>
-          {chapter.end > 120 && <p className="expert-description">No single-square colors. More deductions before your first cat.</p>}
+          <p className="journey-description">{chapter.description}</p>
         </div>
         <button
           className="icon-button"
@@ -199,13 +189,16 @@ export default function JourneyMap({
                       ],
                   } as CSSProperties
                 }
+                data-puzzle-id={level.id}
+                title={level.size + " × " + level.size + " · " + profileFor(level).difficulty + " · " + profileFor(level).focus}
                 className="map-node"
-                aria-label={`Play level ${level.number}${completion ? `, ${earned} of 3 stars` : ""}`}
+                aria-label={`Play level ${stageNumber(level.id)}${completion ? `, ${earned} of 3 stars` : ""}`}
                 aria-current={current ? "step" : undefined}
                 onClick={() => onChoose(level)}
               >
-                {level.number}
+                {stageNumber(level.id)}
               </button>
+              <span className="map-puzzle-info">{level.size} × {level.size} · {profileFor(level).difficulty}</span>
               <div
                 className="map-stars"
                 role="img"
@@ -227,21 +220,21 @@ export default function JourneyMap({
         })}
         {!currentNode && <Sun size={24} className="map-sun" />}
         <div
-          className={`map-chapter-gift ${chapterFinished(progress, chapterIndex) ? "earned" : ""}`}
+          className={`map-chapter-gift ${giftEarned ? "earned" : ""}`}
           style={{ top: height - 106 }}
         >
           <Gift size={30} />
           <div>
             <strong>
-              {chapterFinished(progress, chapterIndex)
-                ? "Chapter gift earned!"
+              {giftEarned
+                ? chapterFinished(progress, chapterIndex) ? "Chapter gift earned!" : "This gift is already yours"
                 : "A gift at the end of the chapter"}
             </strong>
             <span>
               +{CHAPTER_GIFT.hints} hints · +{CHAPTER_GIFT.cats} Find a cat
             </span>
           </div>
-          {chapterFinished(progress, chapterIndex) && <Check size={18} />}
+          {giftEarned && <Check size={18} />}
         </div>
       </div>
       <div className="map-legend">
@@ -278,13 +271,13 @@ export default function JourneyMap({
       </button>
       {showOverview && (
         <div className="level-picker map-quick-list">
-          {LEVELS.map((level) => (
+          {JOURNEY.map((level) => (
             <button
               key={level.id}
               onClick={() => onChoose(level)}
-              aria-label={`Jump to level ${level.number}`}
+              aria-label={`Jump to level ${stageNumber(level.id)}`}
             >
-              {level.number}
+              {stageNumber(level.id)}
             </button>
           ))}
         </div>

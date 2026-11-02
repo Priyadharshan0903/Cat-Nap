@@ -3,7 +3,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
 (async () => {
   let dom = await launch(),
     w = dom.window;
-  assert.equal(w.document.querySelector("h1").textContent, "Level 01Easy");
+  assert.equal(w.document.querySelector("h1").textContent, "Level 01Medium");
   await click(w, "Hint");
   const explanation = w.document.querySelector('[role="region"][aria-label="Hint explanation"]');
   assert.ok(explanation);
@@ -77,7 +77,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   );
   assert.match(
     w.document.querySelector(".site-footer").textContent,
-    /1 \/ 132/,
+    /1 \/ 156/,
   );
   assert.equal(
     new Set(
@@ -108,7 +108,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   assert.equal(w.document.querySelectorAll(".cell.has-cat").length, 5);
   assert.match(
     w.document.querySelector(".site-footer").textContent,
-    /1 \/ 132/,
+    /1 \/ 156/,
   );
   const walletBefore = JSON.parse(
     w.localStorage.getItem("catnap.save.v1"),
@@ -160,7 +160,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   await sleep(30);
   assert.ok(w.document.querySelector(".pause-cover"));
   await click(w, "Ready when you are");
-  await click(w, "All 132 levels");
+  await click(w, "All 156 levels");
   assert.ok(
     w.document.querySelector(".map-path path"),
     "A winding map connects the levels",
@@ -168,12 +168,14 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   assert.equal(w.document.querySelectorAll(".map-node").length, 12);
   w.document.querySelector('[aria-label="Next chapter"]').click();
   await sleep(60);
-  assert.equal(w.document.querySelectorAll(".map-node").length, 24);
+  assert.equal(w.document.querySelectorAll(".map-node").length, 26);
   assert.ok(w.document.querySelector(".map-chapter-gift"));
   await click(w, "Quick level list");
   await click(w, "120");
   assert.match(w.document.querySelector("h1").textContent, /Level 120/);
-  assert.equal(w.document.querySelectorAll(".cell").length, 81);
+  const mixedIds = JSON.parse(fs.readFileSync("lib/journey.json", "utf8"));
+  const published = ["levels", "expert-levels", "variety-levels"].flatMap((name) => JSON.parse(fs.readFileSync("lib/" + name + ".json", "utf8")));
+  assert.equal(w.document.querySelectorAll(".cell").length, published.find((p) => p.id === mixedIds[119]).size ** 2);
   w.document.querySelector('[aria-label="Settings and backups"]').click();
   await sleep(30);
   await click(w, "Export save");
@@ -197,7 +199,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   assert.match(w.document.querySelector("h1").textContent, /Level 01/);
   assert.match(
     w.document.querySelector(".site-footer").textContent,
-    /2 \/ 132/,
+    /2 \/ 156/,
   );
   w.document.querySelector('[aria-label="Settings and backups"]').click();
   await sleep(30);
@@ -214,7 +216,7 @@ const fs = require("node:fs"), assert = require("node:assert/strict");
   );
   assert.match(
     w.document.querySelector(".site-footer").textContent,
-    /2 \/ 132/,
+    /2 \/ 156/,
   );
   dom.window.close();
   const oldLevel = JSON.parse(fs.readFileSync("lib/levels.json", "utf8"))[0];

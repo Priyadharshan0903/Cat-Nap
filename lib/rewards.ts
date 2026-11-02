@@ -1,5 +1,5 @@
 import type { Progress } from "./progress.ts";
-import { CHAPTERS, LEVELS } from "./catalog.ts";
+import { CHAPTERS, LEVELS, LEGACY_CHAPTERS, chapterLevels } from "./catalog.ts";
 export type AssistKind = "hints" | "cats";
 export type Tokens = { hints: number; cats: number };
 export type RewardLedger = {
@@ -16,15 +16,18 @@ export const emptyAssists = (): AttemptAssists => ({
   hintKeys: [],
 });
 export function chapterFinished(progress: Progress, index: number) {
-  const chapter = CHAPTERS[index];
-  return LEVELS.filter(
-    (l) => l.number >= chapter.start && l.number <= chapter.end,
-  ).every((l) => !!progress.completed[l.id]);
+  return chapterLevels(index).every((puzzle) => !!progress.completed[puzzle.id]);
+}
+export function chapterGiftEarned(progress: Progress, index: number) {
+  if (chapterFinished(progress, index)) return true;
+  const previous = LEGACY_CHAPTERS[index];
+  return LEVELS.filter((p) => p.number >= previous.start && p.number <= previous.end)
+    .every((p) => !!progress.completed[p.id]);
 }
 export function earnedRewards(progress: Progress): Tokens {
   const count = Object.keys(progress.completed).length;
   const chapters = CHAPTERS.filter((_, i) =>
-    chapterFinished(progress, i),
+    chapterGiftEarned(progress, i),
   ).length;
   return {
     hints: count + chapters * CHAPTER_GIFT.hints,

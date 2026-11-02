@@ -8,8 +8,8 @@ A cozy cat logic game for your browser. Find a home for every cat, follow a wind
 
 ## A little puzzle, a little progress
 
-- **132 puzzles** from 5×5 to 9×9, including 12 Expert challenges, plus a daily puzzle.
-- **A winding journey** with stars, chapter gifts, and new cat companions.
+- **156 puzzles** from 5×5 to 9×9, with harder puzzles woven into one journey, plus a daily puzzle.
+- **A varied journey:** compact boards, winding regions, different deductions, stars, chapter gifts, and new cat companions.
 - **Useful rewards:** earn hints and “Find a cat” assists, with free refills when you run out.
 - **Simple controls:** single tap for an X, double tap for a cat, or drag to mark or erase Xs.
 - **Pick up where you left off:** automatic local saves, offline play, and save-file transfers between devices.
