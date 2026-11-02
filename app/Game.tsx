@@ -76,7 +76,7 @@ import { coachingHint, type CoachingHint } from "../lib/coaching";
 import { downloadBackup, parseBackup, readBackupFile } from "../lib/backup";
 
 const COLORS = REGION_COLORS;
-type Stroke = { pointer: number; first: number; last: number; cells: Set<number>; before: Board; active: boolean; preview: Board };
+type Stroke = { pointer: number; capture: HTMLButtonElement; first: number; last: number; cells: Set<number>; before: Board; active: boolean; preview: Board };
 const THEMES = [
   { id: "garden", name: "Garden", detail: "Soft greens", swatches: ["#f8f9f4", "#45694e", "#bdd8cf"] },
   { id: "ocean", name: "Seaside", detail: "Cool blues", swatches: ["#f2f7fa", "#346278", "#bfd8e5"] },
@@ -386,7 +386,12 @@ export default function Game() {
     suppressClick.current = false;
     if (!ready || paused || solved || dialog || progress.settings.dragMark === false) return;
     const before = boardRef.current;
-    strokeRef.current = { pointer: event.pointerId, first: cell, last: cell, cells: new Set([cell]), before, preview: before, active: false };
+    strokeRef.current = { pointer: event.pointerId, capture: event.currentTarget, first: cell, last: cell, cells: new Set([cell]), before, preview: before, active: false };
+    // Touch already captures to this tile implicitly. Keep that same target for
+    // the whole gesture; transferring capture fires lostpointercapture on mobile.
+    // Captured movement/up events still bubble to the board for coordinate hit testing.
+    try { event.currentTarget.setPointerCapture?.(event.pointerId); }
+    catch { /* Keep ordinary board events if this browser rejects capture. */ }
   }
   function moveStroke(event: ReactPointerEvent<HTMLDivElement>) {
     const stroke = strokeRef.current;
@@ -401,7 +406,6 @@ export default function Game() {
       stroke.active = true;
       tapRef.current = null;
       setHint(null);
-      event.currentTarget.setPointerCapture?.(event.pointerId);
     }
     for (const c of strokeCells(stroke.last, cell, puzzle.size)) stroke.cells.add(c);
     stroke.last = cell;
@@ -827,8 +831,13 @@ export default function Game() {
                   className={`puzzle-board ${paused ? "is-paused" : ""} ${progress.settings.dragMark !== false ? "can-drag" : ""}`}
                   onPointerMove={moveStroke}
                   onPointerUp={finishStroke}
-                  onPointerCancel={cancelStroke}
-                  onLostPointerCapture={() => { if (strokeRef.current) cancelStroke(); }}
+                  onPointerCancel={(event) => {
+                    if (strokeRef.current?.pointer === event.pointerId) cancelStroke();
+                  }}
+                  onLostPointerCapture={(event) => {
+                    const stroke = strokeRef.current;
+                    if (stroke && stroke.pointer === event.pointerId && event.target === stroke.capture) cancelStroke();
+                  }}
                   role="group"
                   aria-label={`${puzzle.size} by ${puzzle.size} cat puzzle`}
                   style={{ "--size": puzzle.size } as CSSProperties}
@@ -872,8 +881,9 @@ export default function Game() {
                         disabled={!ready || paused}
                         onPointerDown={(event) => beginStroke(event, cell)}
                         onClick={(event) => {
-                          if (event.detail !== 0 && suppressClick.current) return;
-                          handleTap(cell, event.detail !== 0);
+                          const pointerClick = event.detail !== 0 || !!(event.nativeEvent as PointerEvent).pointerType;
+                          if (pointerClick && suppressClick.current) return;
+                          handleTap(cell, pointerClick);
                         }}
                         onContextMenu={(event) => {
                           event.preventDefault();

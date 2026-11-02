@@ -41,7 +41,7 @@ After an import, the backup’s last puzzle opens so the transfer is visible. Ex
 ## Controls
 
 - **Single tap** to mark an X, and tap the X again to clear it. **Double tap** to place a cat, or double tap an existing cat to clear it. Cats take the color of their region; the selected companion stays beside the board.
-- **Drag** across cells to paint Xs. Existing cats and Xs stay in place; one Undo restores the whole stroke. Turn off **Drag to mark Xs** in Settings to scroll over the board on touchscreens.
+- **Drag** across cells to paint Xs with a mouse or one finger. No long press is needed. Existing cats and Xs stay in place; one Undo restores the whole stroke. Turn off **Drag to mark Xs** in Settings to scroll over the board on touchscreens.
 - Choose **Garden**, **Seaside**, **Night**, or **Device** in Settings. Device follows system light/dark changes. Theme and drag preferences are included in backups.
 - Right-click marks an X. Arrow keys move focus; C places a cat, X marks a square, Delete clears it.
 - **Hint** explains an exclusion, focuses the relevant rows, columns, or colors, and dims unrelated cells. You can optionally mark the excluded squares X; it never places a cat. Opening a new hint uses one token; reopening the same hint on the same board is free, including after reload. Applying it is optional. General observation hints without an action are free.
@@ -85,3 +85,5 @@ The daily puzzle selects and transforms a board from the validated pack using th
 - `.github/workflows/deploy.yml`: GitHub Pages build and deployment.
 
 See `docs/architecture.md`, `docs/design.md`, and `docs/verification.md` for implementation decisions and verification limits.
+
+Version 1.2.1 fixes the mobile pointer-capture cancellation path. After deploying an update, reload once, then close Catnap tabs / the installed app and reopen it to let the waiting offline release activate. Keep **Settings → Drag to mark Xs** enabled on the phone; that preference is saved separately on each browser unless transferred in a backup.

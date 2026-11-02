@@ -2264,7 +2264,13 @@ button:not(:disabled):active {
 .theme-swatches { display: flex; gap: 4px; margin-bottom: 9px; }
 .theme-swatches i { width: 18px; height: 18px; border-radius: 50%; border: 1px solid #7e8c7d50; }
 .backup-status { font-size: 12px; line-height: 1.8; padding: 13px; background: var(--soft, #eaf0e4); border-radius: 10px; }
-.puzzle-board.can-drag { touch-action: none; user-select: none; -webkit-user-select: none; }
+.puzzle-board.can-drag,
+.puzzle-board.can-drag .cell {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 .tap-guide { flex-wrap: wrap; row-gap: 6px; }
 .drag-guide { flex-basis: 100%; justify-content: center; color: var(--muted); }
 .cell { transition: filter 180ms ease; }

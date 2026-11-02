@@ -1,6 +1,6 @@
 {
   "name": "catnap",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "levels:generate": "node --experimental-strip-types tools/generate-levels.ts",
     "typecheck": "tsc --noEmit",
-    "test:ui": "node tests/interface.cjs && node tests/features.cjs && node tests/offline.cjs"
+    "test:ui": "node tests/interface.cjs && node tests/features.cjs && node tests/mobile.cjs && node tests/offline.cjs"
   },
   "dependencies": {
     "@fontsource/manrope": "^5.2.8",
